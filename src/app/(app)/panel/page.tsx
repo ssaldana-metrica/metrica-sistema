@@ -94,7 +94,12 @@ export default async function Panel() {
                 className="border-t border-linea-suave text-[13px] transition hover:bg-superficie"
               >
                 <td className="px-5 py-3 font-mono text-[12.5px] font-semibold">
-                  {c.codigo as string}
+                  <Link
+                    href={`/cotizaciones/${c.id as string}`}
+                    className="text-petroleo-oscuro hover:underline"
+                  >
+                    {c.codigo as string}
+                  </Link>
                 </td>
                 <td className="px-5 py-3">
                   {uno(c.cliente as { nombre_comercial: string }[] | null)
