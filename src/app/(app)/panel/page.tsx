@@ -1,46 +1,150 @@
-import { obtenerSesion } from "@/lib/auth";
-import { cerrarSesion } from "@/actions/auth";
-
-const ETIQUETA_ROL: Record<string, string> = {
-  ejecutivo: "Ejecutivo",
-  admin: "Admin",
-  gerencia: "Gerencia",
-};
+import Link from 'next/link';
+import { obtenerSesion } from '@/lib/auth';
+import { crearClienteServidor } from '@/lib/supabase/server';
+import { uno } from '@/lib/util';
+import { BadgeEstado } from '@/components/ui/BadgeEstado';
 
 export default async function Panel() {
   const sesion = await obtenerSesion();
-  if (!sesion) return null; // el layout ya redirigió
+  if (!sesion) return null;
   const { usuario } = sesion;
+  const esAdmin = usuario.rol === 'admin' || usuario.rol === 'gerencia';
+
+  const supabase = await crearClienteServidor();
+  const ahora = new Date();
+  const inicioMes = new Date(ahora.getFullYear(), ahora.getMonth(), 1).toISOString();
+
+  // El RLS acota solo: un ejecutivo cuenta lo suyo; admin/gerencia, todo.
+  const [mes, pendientes, disponibles, recientes] = await Promise.all([
+    supabase
+      .from('cotizaciones')
+      .select('id', { count: 'exact', head: true })
+      .gte('created_at', inicioMes),
+    supabase
+      .from('cotizaciones')
+      .select('id', { count: 'exact', head: true })
+      .eq('estado', 'pendiente'),
+    supabase
+      .from('banco_codigos')
+      .select('id', { count: 'exact', head: true })
+      .eq('estado', 'disponible')
+      .eq('anio', ahora.getFullYear()),
+    supabase
+      .from('cotizaciones')
+      .select(
+        'id, codigo, proyecto, estado, cliente:clientes(nombre_comercial), ejecutivo:usuarios!cotizaciones_ejecutivo_id_fkey(nombre)',
+      )
+      .order('updated_at', { ascending: false })
+      .limit(5),
+  ]);
 
   return (
-    <main className="flex flex-1 items-center justify-center p-6">
-      <div className="w-full max-w-md rounded-2xl border border-linea bg-white p-8 shadow-tarjeta">
-        <div className="mb-6 flex items-center gap-4">
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-petroleo to-petroleo-oscuro text-lg font-bold text-white">
-            {usuario.nombre.charAt(0).toUpperCase()}
-          </div>
-          <div>
-            <div className="text-[15px] font-bold">{usuario.nombre}</div>
-            <div className="font-mono text-[11.5px] text-tinta-tenue">
-              {usuario.correo}
-            </div>
-          </div>
-          <span className="ml-auto rounded-full bg-verde-fondo px-3 py-1 text-[11.5px] font-semibold text-verde">
-            {ETIQUETA_ROL[usuario.rol]}
-          </span>
-        </div>
-
-        <div className="rounded-lg border border-linea-suave bg-superficie p-4 text-[13px] text-tinta-suave">
-          ✓ Sesión iniciada correctamente. El panel completo (banco de
-          códigos, cotizaciones, aprobaciones) llega en el siguiente bloque.
-        </div>
-
-        <form action={cerrarSesion} className="mt-6">
-          <button className="w-full rounded-lg border border-linea bg-white px-4 py-2.5 text-[13px] font-semibold text-tinta transition hover:bg-superficie">
-            Cerrar sesión
-          </button>
-        </form>
+    <div>
+      <div className="mb-6">
+        <h1 className="text-lg font-bold tracking-tight">
+          Hola, {usuario.nombre.split(' ')[0]}
+        </h1>
+        <p className="mt-0.5 text-[13px] text-tinta-tenue">
+          {esAdmin
+            ? 'Resumen operativo de toda la agencia'
+            : 'Resumen de tus cotizaciones'}
+        </p>
       </div>
-    </main>
+
+      <div className="mb-7 grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <Stat
+          etiqueta="Cotizaciones del mes"
+          valor={String(mes.count ?? 0)}
+        />
+        <Stat
+          etiqueta="Pendientes de aprobar"
+          valor={String(pendientes.count ?? 0)}
+          color={pendientes.count ? 'text-ambar' : undefined}
+        />
+        <Stat
+          etiqueta="Códigos disponibles"
+          valor={String(disponibles.count ?? 0)}
+        />
+      </div>
+
+      <div className="overflow-hidden rounded-xl border border-linea bg-white shadow-tarjeta">
+        <div className="flex items-center justify-between border-b border-linea-suave px-5 py-4">
+          <h2 className="text-[14.5px] font-bold">Actividad reciente</h2>
+          <Link
+            href="/banco"
+            className="rounded-lg bg-petroleo px-3.5 py-2 text-[12.5px] font-semibold text-white transition hover:bg-petroleo-oscuro"
+          >
+            + Nueva cotización
+          </Link>
+        </div>
+        <table className="w-full border-collapse">
+          <thead>
+            <tr className="bg-superficie text-left text-[11px] uppercase tracking-wide text-tinta-tenue">
+              <th className="px-5 py-3 font-semibold">Código</th>
+              <th className="px-5 py-3 font-semibold">Cliente</th>
+              <th className="px-5 py-3 font-semibold">Proyecto</th>
+              <th className="px-5 py-3 font-semibold">Ejecutivo</th>
+              <th className="px-5 py-3 font-semibold">Estado</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(recientes.data ?? []).map((c) => (
+              <tr
+                key={c.id as string}
+                className="border-t border-linea-suave text-[13px] transition hover:bg-superficie"
+              >
+                <td className="px-5 py-3 font-mono text-[12.5px] font-semibold">
+                  {c.codigo as string}
+                </td>
+                <td className="px-5 py-3">
+                  {uno(c.cliente as { nombre_comercial: string }[] | null)
+                    ?.nombre_comercial ?? '—'}
+                </td>
+                <td className="px-5 py-3">{(c.proyecto as string) || '—'}</td>
+                <td className="px-5 py-3">
+                  {uno(c.ejecutivo as { nombre: string }[] | null)?.nombre ??
+                    '—'}
+                </td>
+                <td className="px-5 py-3">
+                  <BadgeEstado estado={c.estado as string} />
+                </td>
+              </tr>
+            ))}
+            {(recientes.data ?? []).length === 0 && (
+              <tr>
+                <td
+                  colSpan={5}
+                  className="px-5 py-8 text-center text-[13px] text-tinta-tenue"
+                >
+                  Aún no hay cotizaciones. Toma un código del banco para
+                  empezar.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function Stat({
+  etiqueta,
+  valor,
+  color,
+}: {
+  etiqueta: string;
+  valor: string;
+  color?: string;
+}) {
+  return (
+    <div className="rounded-xl border border-linea bg-white px-5 py-4 shadow-tarjeta">
+      <div className="mb-2 text-[11.5px] font-semibold uppercase tracking-wide text-tinta-tenue">
+        {etiqueta}
+      </div>
+      <div className={`font-mono text-[28px] font-bold tracking-tight ${color ?? ''}`}>
+        {valor}
+      </div>
+    </div>
   );
 }
