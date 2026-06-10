@@ -34,7 +34,13 @@ const fechaCorta = (iso: string | null) =>
       })
     : '—';
 
-export function VistaCotizacion({ cot }: { cot: CotizacionDetalle }) {
+export function VistaCotizacion({
+  cot,
+  pdfHref,
+}: {
+  cot: CotizacionDetalle;
+  pdfHref?: string | null;
+}) {
   const totales = calcularTotales(
     cot.lineas.map((l) => ({ cantidad: l.cantidad, precioUnitario: l.precio })),
     cot.feePorcentaje,
@@ -54,7 +60,30 @@ export function VistaCotizacion({ cot }: { cot: CotizacionDetalle }) {
             {cot.cliente} · {cot.proyecto || 'Sin proyecto'}
           </p>
         </div>
-        <BadgeEstado estado={cot.estado} />
+        <div className="flex items-center gap-3">
+          {pdfHref && (
+            <a
+              href={pdfHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 rounded-lg border border-linea bg-white px-3.5 py-2 text-[12.5px] font-semibold transition hover:bg-superficie"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                className="h-[15px] w-[15px]"
+              >
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
+              </svg>
+              Descargar PDF
+            </a>
+          )}
+          <BadgeEstado estado={cot.estado} />
+        </div>
       </div>
 
       {cot.estado === 'pendiente' && (

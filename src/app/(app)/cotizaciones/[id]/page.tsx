@@ -32,7 +32,7 @@ export default async function DetalleCotizacion({
     .from('cotizaciones')
     .select(
       `id, codigo, estado, proyecto, moneda, fee_porcentaje, fecha_envio_cliente,
-       cliente_id, ejecutivo_id, observacion_admin, fecha_aprobacion, motivo_anulacion,
+       cliente_id, ejecutivo_id, observacion_admin, fecha_aprobacion, motivo_anulacion, pdf_url,
        cliente:clientes(nombre_comercial),
        ejecutivo:usuarios!cotizaciones_ejecutivo_id_fkey(nombre),
        aprobador:usuarios!cotizaciones_aprobada_por_fkey(nombre),
@@ -150,7 +150,10 @@ export default async function DetalleCotizacion({
           Borrador guardado.
         </div>
       )}
-      <VistaCotizacion cot={detalle} />
+      <VistaCotizacion
+        cot={detalle}
+        pdfHref={cot.pdf_url ? `/cotizaciones/${id}/pdf` : null}
+      />
     </div>
   );
 }

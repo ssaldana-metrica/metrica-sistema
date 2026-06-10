@@ -1,7 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // El generador de PDF usa dependencias nativas de Node que no deben
+  // empaquetarse con el bundler.
+  serverExternalPackages: ["@react-pdf/renderer"],
 };
 
 export default nextConfig;
