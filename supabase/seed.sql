@@ -12,9 +12,10 @@ insert into usuarios (nombre, correo, rol) values
   ('Angela Rodríguez', 'angela.rodriguez@metrica.pe', 'admin'),
   ('Erika Pomacaja',   'erika.pomacaja@metrica.pe',   'admin'),
   ('Ariana Torres',    'ariana.torres@metrica.pe',    'gerencia'),
-  -- Cuenta real del propietario del sistema, con rol gerencia para poder
-  -- administrar usuarios desde el primer login. Cambiar si hace falta.
-  ('Métrica IA',       'metrica.ia@metrica.pe',       'gerencia')
+  -- Cuentas reales de los propietarios del sistema, con rol gerencia
+  -- (ven y operan TODO el flujo: ejecutivo + aprobaciones + usuarios).
+  ('Métrica IA',             'metrica.ia@metrica.pe', 'gerencia'),
+  ('Sergio Saldaña Guardia', 'ssaldana@metrica.pe',   'gerencia')
 on conflict (correo) do nothing;
 
 -- ── Clientes ────────────────────────────────────────────────────────────────
