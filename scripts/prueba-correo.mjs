@@ -12,7 +12,9 @@ const env = Object.fromEntries(
 );
 
 const limpiar = (v) =>
-  v && v.trim() && v.trim().toUpperCase() !== 'PENDIENTE' ? v.trim() : undefined;
+  v && v.trim() && !v.trim().toUpperCase().startsWith('PENDIENTE')
+    ? v.trim()
+    : undefined;
 
 console.log('── Diagnóstico de correo (Resend) ──\n');
 
@@ -20,8 +22,9 @@ const llave = limpiar(env.RESEND_API_KEY);
 const pruebas = limpiar(env.CORREO_PRUEBAS);
 
 if (!llave) {
-  console.log('✗ RESEND_API_KEY no está configurada (vacía o dice PENDIENTE).');
-  console.log('  → Pega tu llave re_... de resend.com en .env.local y reinicia.');
+  console.log('✗ RESEND_API_KEY no está configurada (vacía o sigue el marcador PENDIENTE).');
+  console.log('  → Crea una llave en resend.com → API Keys → Create API Key,');
+  console.log('    pégala en .env.local (RESEND_API_KEY=re_...) y vuelve a correr esto.');
   process.exit(1);
 }
 console.log(`✓ RESEND_API_KEY presente (${llave.slice(0, 6)}…)`);

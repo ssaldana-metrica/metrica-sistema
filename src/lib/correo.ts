@@ -12,9 +12,12 @@ import { Resend } from 'resend';
 
 export type ResultadoCorreo = { enviado: boolean; detalle: string };
 
-// Los marcadores del .env.local de ejemplo no cuentan como configuración.
+// Los marcadores del .env.local de ejemplo no cuentan como configuración
+// (cualquier valor que empiece con PENDIENTE, p. ej. "PENDIENTE_pegar_llave").
 const limpiar = (v?: string) =>
-  v && v.trim() && v.trim().toUpperCase() !== 'PENDIENTE' ? v.trim() : undefined;
+  v && v.trim() && !v.trim().toUpperCase().startsWith('PENDIENTE')
+    ? v.trim()
+    : undefined;
 
 export async function enviarCorreoInterno({
   para,
