@@ -442,6 +442,12 @@ export function FormularioCotizacion({
                 {formatearMonto(totales.fee, moneda)}
               </span>
             </div>
+            <div className="flex justify-between border-b border-linea-suave py-2 text-[13px] font-semibold">
+              <span>Monto neto</span>
+              <span className="font-mono">
+                {formatearMonto(totales.neto, moneda)}
+              </span>
+            </div>
             <div className="flex justify-between border-b border-linea-suave py-2 text-[13px]">
               <span>IGV (18%)</span>
               <span className="font-mono font-semibold">

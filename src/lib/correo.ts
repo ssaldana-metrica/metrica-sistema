@@ -5,12 +5,16 @@ import { Resend } from 'resend';
 //
 // Modo pruebas (mientras el dominio metrica.pe no esté verificado en Resend):
 // - Remitente: onboarding@resend.dev (el de pruebas de Resend).
-// - Si CORREO_PRUEBAS está definido en .env.local, TODO correo se redirige
-//   ahí (Resend en pruebas solo entrega al dueño de la cuenta) y el cuerpo
-//   indica quién era el destinatario real.
+// - Resend en pruebas SOLO entrega al correo con el que te registraste en
+//   Resend. Define CORREO_PRUEBAS con ese correo y todo se redirige ahí,
+//   indicando en el cuerpo el destinatario real.
 // Al verificar el dominio: definir CORREO_REMITENTE y quitar CORREO_PRUEBAS.
 
 export type ResultadoCorreo = { enviado: boolean; detalle: string };
+
+// Los marcadores del .env.local de ejemplo no cuentan como configuración.
+const limpiar = (v?: string) =>
+  v && v.trim() && v.trim().toUpperCase() !== 'PENDIENTE' ? v.trim() : undefined;
 
 export async function enviarCorreoInterno({
   para,
@@ -18,24 +22,28 @@ export async function enviarCorreoInterno({
   html,
   adjuntos,
 }: {
-  para: string;
+  para: string | string[];
   asunto: string;
   html: string;
   adjuntos?: { nombre: string; contenido: Buffer }[];
 }): Promise<ResultadoCorreo> {
-  const llave = process.env.RESEND_API_KEY;
-  if (!llave || llave === 'PENDIENTE') {
+  const llave = limpiar(process.env.RESEND_API_KEY);
+  if (!llave) {
     return {
       enviado: false,
-      detalle: 'Correo omitido: Resend aún no está configurado.',
+      detalle: 'Correo omitido: falta RESEND_API_KEY en .env.local.',
     };
   }
 
-  const redireccion = process.env.CORREO_PRUEBAS;
-  const destino = redireccion || para;
+  const destinatarios = (Array.isArray(para) ? para : [para]).filter(Boolean);
+  if (destinatarios.length === 0)
+    return { enviado: false, detalle: 'Correo omitido: sin destinatario.' };
+
+  const redireccion = limpiar(process.env.CORREO_PRUEBAS);
+  const destino = redireccion ? [redireccion] : destinatarios;
   const cuerpo = redireccion
     ? `<p style="background:#F6ECD2;color:#B5821E;padding:10px 14px;border-radius:8px;font-family:monospace;font-size:12px;">
-         MODO PRUEBAS · destinatario real: ${para}
+         MODO PRUEBAS · destinatario real: ${destinatarios.join(', ')}
        </p>${html}`
     : html;
 
@@ -43,7 +51,7 @@ export async function enviarCorreoInterno({
     const resend = new Resend(llave);
     const { error } = await resend.emails.send({
       from:
-        process.env.CORREO_REMITENTE ??
+        limpiar(process.env.CORREO_REMITENTE) ??
         'Métrica Sistema <onboarding@resend.dev>',
       to: destino,
       subject: asunto,
@@ -53,12 +61,22 @@ export async function enviarCorreoInterno({
         content: a.contenido,
       })),
     });
-    if (error) return { enviado: false, detalle: `Correo falló: ${error.message}` };
+    if (error) {
+      // El error más común en modo pruebas, traducido a una instrucción clara
+      if (/testing emails|verify a domain|your own email/i.test(error.message)) {
+        return {
+          enviado: false,
+          detalle:
+            'Resend en modo pruebas solo entrega al correo del dueño de la cuenta Resend. Pon ese correo en CORREO_PRUEBAS dentro de .env.local y reinicia el servidor.',
+        };
+      }
+      return { enviado: false, detalle: `Correo falló: ${error.message}` };
+    }
     return {
       enviado: true,
       detalle: redireccion
-        ? `Correo enviado a ${redireccion} (pruebas; destinatario real: ${para}).`
-        : `Correo enviado a ${para}.`,
+        ? `Correo enviado a ${redireccion} (pruebas; destinatario real: ${destinatarios.join(', ')}).`
+        : `Correo enviado a ${destinatarios.join(', ')}.`,
     };
   } catch (e) {
     return {

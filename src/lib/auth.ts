@@ -1,3 +1,4 @@
+import { cache } from 'react';
 import { redirect } from 'next/navigation';
 import { crearClienteServidor } from '@/lib/supabase/server';
 import { dominioPermitido } from '@/config/dominios';
@@ -15,7 +16,10 @@ export type Usuario = {
 // Devuelve el usuario logueado y su registro en la tabla `usuarios`,
 // o null si no hay sesión válida (sin sesión, dominio no permitido,
 // usuario inexistente o dado de baja).
-export async function obtenerSesion(): Promise<{ usuario: Usuario } | null> {
+// cache(): el layout y la página comparten una sola consulta por petición.
+export const obtenerSesion = cache(async (): Promise<{
+  usuario: Usuario;
+} | null> => {
   const supabase = await crearClienteServidor();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user?.email) return null;
@@ -33,7 +37,7 @@ export async function obtenerSesion(): Promise<{ usuario: Usuario } | null> {
     .maybeSingle();
 
   return usuario ? { usuario } : null;
-}
+});
 
 // Para páginas restringidas por rol: devuelve la sesión o redirige.
 export async function exigirRol(roles: Rol[]): Promise<{ usuario: Usuario }> {

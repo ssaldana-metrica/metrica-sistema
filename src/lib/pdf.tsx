@@ -260,6 +260,12 @@ function DocumentoCotizacion({ d }: { d: DatosPdf }) {
               </Text>
               <Text>{formatearMonto(t.fee, d.moneda)}</Text>
             </View>
+            <View style={[s.filaTotal, { borderTopWidth: 1, borderTopColor: LINEA }]}>
+              <Text style={{ fontFamily: 'Helvetica-Bold' }}>Monto neto</Text>
+              <Text style={{ fontFamily: 'Helvetica-Bold' }}>
+                {formatearMonto(t.neto, d.moneda)}
+              </Text>
+            </View>
             <View style={s.filaTotal}>
               <Text style={{ color: GRIS }}>IGV (18%)</Text>
               <Text>{formatearMonto(t.igv, d.moneda)}</Text>

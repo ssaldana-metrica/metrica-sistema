@@ -2,11 +2,18 @@
 
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
+import { after } from 'next/server';
 import { obtenerSesion } from '@/lib/auth';
 import { crearClienteServidor } from '@/lib/supabase/server';
 import { crearClienteAdmin } from '@/lib/supabase/admin';
-import { redondear, type Moneda } from '@/lib/calculos';
+import {
+  calcularTotales,
+  formatearMonto,
+  redondear,
+  type Moneda,
+} from '@/lib/calculos';
 import { NUEVO_CLIENTE } from '@/lib/util';
+import { enviarCorreoInterno, plantillaCorreo } from '@/lib/correo';
 
 export type LineaEntrada = {
   proveedorNombre: string;
@@ -180,6 +187,53 @@ export async function guardarCotizacion(
         error:
           'Se guardó el borrador, pero no se pudo enviar a aprobación. Intenta de nuevo.',
       };
+
+    // Aviso interno a administración (después de responder, para no
+    // frenar la pantalla; si el correo falla, el envío no se afecta).
+    const codigo = entrada.codigo;
+    const ejecutivo = sesion.usuario.nombre;
+    const totales = calcularTotales(
+      entrada.lineas.map((l) => ({
+        cantidad: l.cantidad,
+        precioUnitario: l.precioUnitario,
+      })),
+      entrada.feePorcentaje,
+    );
+    const moneda = entrada.moneda;
+    const proyecto = entrada.proyecto.trim();
+    after(async () => {
+      const admin = crearClienteAdmin();
+      const [{ data: admins }, { data: cliente }] = await Promise.all([
+        admin
+          .from('usuarios')
+          .select('correo')
+          .eq('rol', 'admin')
+          .eq('activo', true),
+        admin
+          .from('clientes')
+          .select('nombre_comercial')
+          .eq('id', clienteId)
+          .maybeSingle(),
+      ]);
+      const correos = (admins ?? []).map((a) => a.correo as string);
+      if (correos.length === 0) return;
+      await enviarCorreoInterno({
+        para: correos,
+        asunto: `⏳ ${codigo} pendiente de aprobación · ${cliente?.nombre_comercial ?? ''}`,
+        html: plantillaCorreo(
+          `Nueva cotización por aprobar`,
+          `<p style="font-size:13px;">${ejecutivo} envió una cotización a la cola de aprobación:</p>
+           <table style="font-size:13px;margin:14px 0;">
+             <tr><td style="color:#828B83;padding-right:14px;">Código</td><td style="font-family:monospace;"><b>${codigo}</b></td></tr>
+             <tr><td style="color:#828B83;padding-right:14px;">Cliente</td><td>${cliente?.nombre_comercial ?? '—'}</td></tr>
+             <tr><td style="color:#828B83;padding-right:14px;">Proyecto</td><td>${proyecto || '—'}</td></tr>
+             <tr><td style="color:#828B83;padding-right:14px;">Monto neto</td><td style="font-family:monospace;">${formatearMonto(totales.neto, moneda)}</td></tr>
+             <tr><td style="color:#828B83;padding-right:14px;">Total</td><td style="font-family:monospace;"><b>${formatearMonto(totales.total, moneda)}</b></td></tr>
+           </table>
+           <p style="font-size:13px;">Entra al sistema, sección <b>Aprobaciones</b>, para revisarla.</p>`,
+        ),
+      });
+    });
   }
 
   revalidatePath('/banco');

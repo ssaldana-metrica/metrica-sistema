@@ -166,6 +166,12 @@ export function VistaCotizacion({
                 {formatearMonto(totales.fee, cot.moneda)}
               </span>
             </div>
+            <div className="flex justify-between border-b border-linea-suave py-2 text-[13px] font-semibold">
+              <span>Monto neto</span>
+              <span className="font-mono">
+                {formatearMonto(totales.neto, cot.moneda)}
+              </span>
+            </div>
             <div className="flex justify-between border-b border-linea-suave py-2 text-[13px]">
               <span>IGV (18%)</span>
               <span className="font-mono font-semibold">

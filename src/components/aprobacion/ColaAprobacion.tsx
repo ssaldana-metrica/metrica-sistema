@@ -231,6 +231,12 @@ export function ColaAprobacion({
                     {formatearMonto(totales.fee, actual.moneda)}
                   </span>
                 </div>
+                <div className="flex justify-between border-t border-linea py-1 font-semibold">
+                  <span>Monto neto</span>
+                  <span className="font-mono">
+                    {formatearMonto(totales.neto, actual.moneda)}
+                  </span>
+                </div>
                 <div className="flex justify-between py-1">
                   <span className="text-tinta-tenue">IGV (18%)</span>
                   <span className="font-mono">

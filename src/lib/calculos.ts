@@ -22,9 +22,10 @@ export function calcularTotales(lineas: LineaCalculo[], feePorcentaje: number) {
     lineas.reduce((suma, l) => suma + subtotalLinea(l), 0),
   );
   const fee = redondear(subtotal * ((feePorcentaje || 0) / 100));
-  const igv = redondear((subtotal + fee) * IGV);
-  const total = redondear(subtotal + fee + igv);
-  return { subtotal, fee, igv, total };
+  const neto = redondear(subtotal + fee); // monto neto antes de impuestos
+  const igv = redondear(neto * IGV);
+  const total = redondear(neto + igv);
+  return { subtotal, fee, neto, igv, total };
 }
 
 export function formatearMonto(n: number, moneda: Moneda): string {
