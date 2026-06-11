@@ -25,14 +25,17 @@ export type CotizacionDetalle = {
   }[];
 };
 
-const fechaCorta = (iso: string | null) =>
-  iso
-    ? new Date(iso).toLocaleDateString('es-PE', {
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric',
-      })
-    : '—';
+const fechaCorta = (iso: string | null) => {
+  if (!iso) return '—';
+  // Las fechas sin hora (AAAA-MM-DD) se anclan al mediodía para que el
+  // huso horario de Lima no las corra un día hacia atrás.
+  const valor = /^\d{4}-\d{2}-\d{2}$/.test(iso) ? `${iso}T12:00:00` : iso;
+  return new Date(valor).toLocaleDateString('es-PE', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+};
 
 export function VistaCotizacion({
   cot,
