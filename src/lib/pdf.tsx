@@ -107,6 +107,15 @@ const s = StyleSheet.create({
     fontSize: 12,
     fontFamily: 'Helvetica-Bold',
   },
+  nota: {
+    marginTop: 26,
+    borderTopWidth: 1,
+    borderTopColor: LINEA,
+    paddingTop: 10,
+    fontSize: 8,
+    color: GRIS,
+    lineHeight: 1.5,
+  },
   pieIzq: {
     position: 'absolute',
     bottom: 28,
@@ -188,7 +197,7 @@ function DocumentoCotizacion({ d }: { d: DatosPdf }) {
           </View>
           <View style={s.dato}>
             <Text style={s.datoK}>RUC del cliente</Text>
-            <Text style={s.datoV}>{d.cliente.ruc}</Text>
+            <Text style={s.datoV}>{d.cliente.ruc || '—'}</Text>
           </View>
           <View style={s.dato}>
             <Text style={s.datoK}>Proyecto / Servicio</Text>
@@ -262,6 +271,7 @@ function DocumentoCotizacion({ d }: { d: DatosPdf }) {
           </View>
         </View>
 
+        <Text style={s.nota}>• {EMPRESA.notaCotizacion}</Text>
       </Page>
     </Document>
   );

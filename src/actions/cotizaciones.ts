@@ -4,7 +4,9 @@ import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { obtenerSesion } from '@/lib/auth';
 import { crearClienteServidor } from '@/lib/supabase/server';
+import { crearClienteAdmin } from '@/lib/supabase/admin';
 import { redondear, type Moneda } from '@/lib/calculos';
+import { NUEVO_CLIENTE } from '@/lib/util';
 
 export type LineaEntrada = {
   proveedorNombre: string;
@@ -15,7 +17,8 @@ export type LineaEntrada = {
 
 export type EntradaCotizacion = {
   codigo: string;
-  clienteId: string;
+  clienteId: string; // id existente o NUEVO_CLIENTE
+  clienteNuevo?: { nombre: string; razonSocial: string; ruc: string };
   proyecto: string;
   moneda: Moneda;
   feePorcentaje: number;
@@ -58,6 +61,38 @@ export async function guardarCotizacion(
 
   const supabase = await crearClienteServidor();
 
+  // Cliente nuevo escrito a mano: lo registra (o reutiliza si ya existe
+  // uno con el mismo nombre) y usa su id.
+  let clienteId = entrada.clienteId;
+  if (clienteId === NUEVO_CLIENTE) {
+    const nombre = entrada.clienteNuevo?.nombre.trim() ?? '';
+    if (!nombre) return { error: 'Escribe el nombre del cliente nuevo.' };
+
+    const admin = crearClienteAdmin();
+    const { data: yaExiste } = await admin
+      .from('clientes')
+      .select('id')
+      .ilike('nombre_comercial', nombre)
+      .maybeSingle();
+
+    if (yaExiste) {
+      clienteId = yaExiste.id as string;
+    } else {
+      const { data: creado, error: errorCliente } = await admin
+        .from('clientes')
+        .insert({
+          nombre_comercial: nombre,
+          razon_social: entrada.clienteNuevo?.razonSocial.trim() || nombre,
+          ruc: entrada.clienteNuevo?.ruc.trim() || '',
+        })
+        .select('id')
+        .single();
+      if (errorCliente || !creado)
+        return { error: 'No se pudo registrar el cliente nuevo.' };
+      clienteId = creado.id as string;
+    }
+  }
+
   // ¿Ya existe una cotización con este código? (el RLS solo muestra la propia)
   const { data: existente } = await supabase
     .from('cotizaciones')
@@ -72,7 +107,7 @@ export async function guardarCotizacion(
   }
 
   const campos = {
-    cliente_id: entrada.clienteId,
+    cliente_id: clienteId,
     proyecto: entrada.proyecto.trim(),
     moneda: entrada.moneda,
     fee_porcentaje: entrada.feePorcentaje,
@@ -81,15 +116,14 @@ export async function guardarCotizacion(
 
   let id: string;
 
+  // IMPORTANTE: las líneas se guardan ANTES de pasar a 'pendiente'.
+  // El candado RLS solo permite tocar líneas de una cotización en
+  // borrador u observada; si cambiáramos el estado primero, el propio
+  // candado bloquearía el guardado de las líneas.
   if (existente) {
     const { error } = await supabase
       .from('cotizaciones')
-      .update({
-        ...campos,
-        // Al reenviar tras una observación pasa a 'pendiente' con el MISMO
-        // código; si solo guarda, conserva su estado actual.
-        estado: enviar ? 'pendiente' : existente.estado,
-      })
+      .update(campos)
       .eq('id', existente.id);
     if (error) return { error: 'No se pudo guardar. Intenta de nuevo.' };
     id = existente.id;
@@ -107,7 +141,7 @@ export async function guardarCotizacion(
         codigo: entrada.codigo,
         ejecutivo_id: sesion.usuario.id,
         ...campos,
-        estado: enviar ? 'pendiente' : 'borrador',
+        estado: 'borrador',
       })
       .select('id')
       .single();
@@ -133,6 +167,20 @@ export async function guardarCotizacion(
     .insert(filas);
   if (errorLineas)
     return { error: 'No se pudieron guardar las líneas. Intenta de nuevo.' };
+
+  // Con las líneas ya guardadas, recién ahora pasa a la cola de aprobación.
+  // Al reenviar tras una observación conserva el MISMO código.
+  if (enviar) {
+    const { error: errorEnvio } = await supabase
+      .from('cotizaciones')
+      .update({ estado: 'pendiente' })
+      .eq('id', id);
+    if (errorEnvio)
+      return {
+        error:
+          'Se guardó el borrador, pero no se pudo enviar a aprobación. Intenta de nuevo.',
+      };
+  }
 
   revalidatePath('/banco');
   revalidatePath('/panel');

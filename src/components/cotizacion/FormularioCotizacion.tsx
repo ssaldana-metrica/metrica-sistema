@@ -6,6 +6,7 @@ import {
   type EntradaCotizacion,
 } from '@/actions/cotizaciones';
 import { calcularTotales, formatearMonto, type Moneda } from '@/lib/calculos';
+import { NUEVO_CLIENTE } from '@/lib/util';
 
 type LineaUI = {
   proveedor: string;
@@ -47,6 +48,9 @@ export function FormularioCotizacion({
   inicial: CotizacionInicial | null;
 }) {
   const [clienteId, setClienteId] = useState(inicial?.clienteId ?? '');
+  const [nuevoNombre, setNuevoNombre] = useState('');
+  const [nuevaRazon, setNuevaRazon] = useState('');
+  const [nuevoRuc, setNuevoRuc] = useState('');
   const [proyecto, setProyecto] = useState(inicial?.proyecto ?? '');
   const [moneda, setMoneda] = useState<Moneda>(inicial?.moneda ?? 'PEN');
   const [fee, setFee] = useState(
@@ -96,6 +100,10 @@ export function FormularioCotizacion({
     const entrada: EntradaCotizacion = {
       codigo,
       clienteId,
+      clienteNuevo:
+        clienteId === NUEVO_CLIENTE
+          ? { nombre: nuevoNombre, razonSocial: nuevaRazon, ruc: nuevoRuc }
+          : undefined,
       proyecto,
       moneda,
       feePorcentaje: parseFloat(fee) || 0,
@@ -206,6 +214,7 @@ export function FormularioCotizacion({
                   {c.nombre}
                 </option>
               ))}
+              <option value={NUEVO_CLIENTE}>＋ Registrar cliente nuevo…</option>
             </select>
           </div>
           <div>
@@ -258,6 +267,43 @@ export function FormularioCotizacion({
             />
           </div>
         </div>
+
+        {clienteId === NUEVO_CLIENTE && (
+          <div className="mb-6 rounded-[10px] border border-petroleo/25 bg-verde-fondo/40 p-4">
+            <div className="mb-3 text-[11.5px] font-bold uppercase tracking-wide text-petroleo-oscuro">
+              Datos del cliente nuevo
+            </div>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <div>
+                <label className={labelClase}>Nombre comercial *</label>
+                <input
+                  value={nuevoNombre}
+                  onChange={(e) => setNuevoNombre(e.target.value)}
+                  placeholder="Ej. Cementos Lima"
+                  className={inputClase}
+                />
+              </div>
+              <div>
+                <label className={labelClase}>Razón social</label>
+                <input
+                  value={nuevaRazon}
+                  onChange={(e) => setNuevaRazon(e.target.value)}
+                  placeholder="Si se deja vacío, usa el nombre"
+                  className={inputClase}
+                />
+              </div>
+              <div>
+                <label className={labelClase}>RUC</label>
+                <input
+                  value={nuevoRuc}
+                  onChange={(e) => setNuevoRuc(e.target.value)}
+                  placeholder="Opcional, se puede completar luego"
+                  className={inputClase}
+                />
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Líneas de proveedor */}
         <div className="mb-2 flex items-end justify-between">

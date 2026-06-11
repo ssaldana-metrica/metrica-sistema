@@ -7,6 +7,7 @@ import {
   observarCotizacion,
 } from '@/actions/aprobaciones';
 import { calcularTotales, formatearMonto, type Moneda } from '@/lib/calculos';
+import { EMPRESA } from '@/config/empresa';
 
 export type PendienteAprobacion = {
   id: string;
@@ -147,7 +148,7 @@ export function ColaAprobacion({
                   Métri<span className="text-petroleo">ca</span>
                 </div>
                 <div className="mt-1 text-[11px] text-tinta-tenue">
-                  Comunicación Estratégica S.A.C.
+                  {EMPRESA.razonSocial} · RUC {EMPRESA.ruc}
                 </div>
               </div>
               <div className="text-right font-mono text-[11.5px] text-tinta-suave">
@@ -243,6 +244,10 @@ export function ColaAprobacion({
                   </span>
                 </div>
               </div>
+            </div>
+
+            <div className="mt-5 border-t border-linea pt-3 text-[10.5px] leading-relaxed text-tinta-tenue">
+              • {EMPRESA.notaCotizacion}
             </div>
           </div>
         </div>
