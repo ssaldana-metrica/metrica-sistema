@@ -5,7 +5,11 @@ import { exigirRol } from '@/lib/auth';
 import { crearClienteServidor } from '@/lib/supabase/server';
 import { crearClienteAdmin } from '@/lib/supabase/admin';
 import { generarPdfCotizacion, type DatosPdf } from '@/lib/pdf';
-import { enviarCorreoInterno, plantillaCorreo } from '@/lib/correo';
+import {
+  enviarCorreoInterno,
+  escaparHtml,
+  plantillaCorreo,
+} from '@/lib/correo';
 import { uno } from '@/lib/util';
 import { calcularTotales, formatearMonto, type Moneda } from '@/lib/calculos';
 
@@ -125,11 +129,11 @@ export async function aprobarCotizacion(id: string): Promise<ResultadoAprobar> {
     asunto: `✓ ${cot.codigo} aprobada · ${cliente.nombre_comercial}`,
     html: plantillaCorreo(
       `Cotización ${cot.codigo} aprobada`,
-      `<p style="font-size:13px;">Hola ${ejecutivo.nombre.split(' ')[0]},</p>
-       <p style="font-size:13px;">Tu cotización fue <b style="color:#2E7D55;">aprobada</b> por ${usuario.nombre}. El PDF oficial va adjunto.</p>
+      `<p style="font-size:13px;">Hola ${escaparHtml(ejecutivo.nombre.split(' ')[0])},</p>
+       <p style="font-size:13px;">Tu cotización fue <b style="color:#2E7D55;">aprobada</b> por ${escaparHtml(usuario.nombre)}. El PDF oficial va adjunto.</p>
        <table style="font-size:13px;margin:14px 0;">
-         <tr><td style="color:#828B83;padding-right:14px;">Cliente</td><td><b>${cliente.nombre_comercial}</b></td></tr>
-         <tr><td style="color:#828B83;padding-right:14px;">Proyecto</td><td>${cot.proyecto}</td></tr>
+         <tr><td style="color:#828B83;padding-right:14px;">Cliente</td><td><b>${escaparHtml(cliente.nombre_comercial)}</b></td></tr>
+         <tr><td style="color:#828B83;padding-right:14px;">Proyecto</td><td>${escaparHtml(cot.proyecto as string)}</td></tr>
          <tr><td style="color:#828B83;padding-right:14px;">Total</td><td style="font-family:monospace;"><b>${formatearMonto(totales.total, cot.moneda as Moneda)}</b></td></tr>
        </table>`,
     ),
@@ -182,9 +186,9 @@ export async function observarCotizacion(
     asunto: `⚠ ${cot.codigo} observada · ${cliente?.nombre_comercial ?? ''}`,
     html: plantillaCorreo(
       `Cotización ${cot.codigo} observada`,
-      `<p style="font-size:13px;">Hola ${ejecutivo?.nombre.split(' ')[0] ?? ''},</p>
-       <p style="font-size:13px;">${usuario.nombre} devolvió tu cotización de <b>${cliente?.nombre_comercial ?? ''}</b> con esta observación:</p>
-       <p style="font-size:13px;background:#F6ECD2;color:#B5821E;padding:12px 16px;border-radius:8px;">${observacion.trim()}</p>
+      `<p style="font-size:13px;">Hola ${escaparHtml(ejecutivo?.nombre.split(' ')[0] ?? '')},</p>
+       <p style="font-size:13px;">${escaparHtml(usuario.nombre)} devolvió tu cotización de <b>${escaparHtml(cliente?.nombre_comercial ?? '')}</b> con esta observación:</p>
+       <p style="font-size:13px;background:#F6ECD2;color:#B5821E;padding:12px 16px;border-radius:8px;">${escaparHtml(observacion.trim())}</p>
        <p style="font-size:13px;">Corrígela en el sistema y reenvíala — conserva el mismo código.</p>`,
     ),
   });

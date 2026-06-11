@@ -12,6 +12,16 @@ import { Resend } from 'resend';
 
 export type ResultadoCorreo = { enviado: boolean; detalle: string };
 
+// Para texto escrito por usuarios (nombres, proyectos, observaciones) que va
+// dentro del HTML del correo: un "<" o un "&" literal no deben romperlo ni
+// permitir colar etiquetas.
+export const escaparHtml = (v: string) =>
+  v
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;');
+
 // Los marcadores del .env.local de ejemplo no cuentan como configuración
 // (cualquier valor que empiece con PENDIENTE, p. ej. "PENDIENTE_pegar_llave").
 const limpiar = (v?: string) =>

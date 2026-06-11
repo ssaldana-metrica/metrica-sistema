@@ -5,7 +5,12 @@ import {
   guardarCotizacion,
   type EntradaCotizacion,
 } from '@/actions/cotizaciones';
-import { calcularTotales, formatearMonto, type Moneda } from '@/lib/calculos';
+import {
+  calcularTotales,
+  formatearMonto,
+  redondear,
+  type Moneda,
+} from '@/lib/calculos';
 import { NUEVO_CLIENTE } from '@/lib/util';
 
 type LineaUI = {
@@ -399,7 +404,9 @@ export function FormularioCotizacion({
                 </td>
                 <td className="px-2 py-1.5 text-right font-mono text-[12.5px] font-semibold">
                   {formatearMonto(
-                    (parseFloat(l.cantidad) || 0) * (parseFloat(l.precio) || 0),
+                    redondear(
+                      (parseFloat(l.cantidad) || 0) * (parseFloat(l.precio) || 0),
+                    ),
                     moneda,
                   )}
                 </td>

@@ -13,7 +13,11 @@ import {
   type Moneda,
 } from '@/lib/calculos';
 import { NUEVO_CLIENTE } from '@/lib/util';
-import { enviarCorreoInterno, plantillaCorreo } from '@/lib/correo';
+import {
+  enviarCorreoInterno,
+  escaparHtml,
+  plantillaCorreo,
+} from '@/lib/correo';
 import { generarPdfCotizacion } from '@/lib/pdf';
 
 export type LineaEntrada = {
@@ -54,6 +58,15 @@ export async function guardarCotizacion(
     return { error: `Máximo ${MAX_LINEAS} líneas por cotización.` };
   if (entrada.feePorcentaje < 0 || entrada.feePorcentaje > 100)
     return { error: 'El fee debe estar entre 0% y 100%.' };
+  // Negativos jamás, ni siquiera en borrador: la base los rechazaría a mitad
+  // del reemplazo de líneas y se perderían las anteriores.
+  const negativa = entrada.lineas.findIndex(
+    (l) => l.cantidad < 0 || l.precioUnitario < 0,
+  );
+  if (negativa >= 0)
+    return {
+      error: `La línea ${negativa + 1} tiene cantidad o precio negativo.`,
+    };
 
   if (enviar) {
     if (!entrada.proyecto.trim())
@@ -263,11 +276,11 @@ export async function guardarCotizacion(
           asunto: `⏳ ${codigo} pendiente de aprobación · ${cliente?.nombre_comercial ?? ''}`,
           html: plantillaCorreo(
             `Nueva cotización por aprobar`,
-            `<p style="font-size:13px;">${ejecutivo} envió una cotización a la cola de aprobación:</p>
+            `<p style="font-size:13px;">${escaparHtml(ejecutivo)} envió una cotización a la cola de aprobación:</p>
              <table style="font-size:13px;margin:14px 0;">
                <tr><td style="color:#828B83;padding-right:14px;">Código</td><td style="font-family:monospace;"><b>${codigo}</b></td></tr>
-               <tr><td style="color:#828B83;padding-right:14px;">Cliente</td><td>${cliente?.nombre_comercial ?? '—'}</td></tr>
-               <tr><td style="color:#828B83;padding-right:14px;">Proyecto</td><td>${proyecto || '—'}</td></tr>
+               <tr><td style="color:#828B83;padding-right:14px;">Cliente</td><td>${escaparHtml(cliente?.nombre_comercial ?? '—')}</td></tr>
+               <tr><td style="color:#828B83;padding-right:14px;">Proyecto</td><td>${escaparHtml(proyecto || '—')}</td></tr>
                <tr><td style="color:#828B83;padding-right:14px;">Monto neto</td><td style="font-family:monospace;">${formatearMonto(totales.neto, moneda)}</td></tr>
                <tr><td style="color:#828B83;padding-right:14px;">Total</td><td style="font-family:monospace;"><b>${formatearMonto(totales.total, moneda)}</b></td></tr>
              </table>
