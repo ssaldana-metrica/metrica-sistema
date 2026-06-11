@@ -14,6 +14,7 @@ import {
 } from '@/lib/calculos';
 import { NUEVO_CLIENTE } from '@/lib/util';
 import { enviarCorreoInterno, plantillaCorreo } from '@/lib/correo';
+import { generarPdfCotizacion } from '@/lib/pdf';
 
 export type LineaEntrada = {
   proveedorNombre: string;
@@ -201,6 +202,16 @@ export async function guardarCotizacion(
     );
     const moneda = entrada.moneda;
     const proyecto = entrada.proyecto.trim();
+    const fechaEnvioCliente = entrada.fechaEnvioCliente;
+    const feePorcentaje = entrada.feePorcentaje;
+    const lineasPdf = entrada.lineas.map((l, i) => ({
+      orden: i + 1,
+      proveedor: l.proveedorNombre.trim(),
+      descripcion: l.descripcion.trim(),
+      cantidad: l.cantidad || 0,
+      precio: l.precioUnitario || 0,
+      subtotal: redondear((l.cantidad || 0) * (l.precioUnitario || 0)),
+    }));
     after(async () => {
       try {
         const admin = crearClienteAdmin();
@@ -212,7 +223,7 @@ export async function guardarCotizacion(
             .eq('activo', true),
           admin
             .from('clientes')
-            .select('nombre_comercial')
+            .select('nombre_comercial, razon_social, ruc')
             .eq('id', clienteId)
             .maybeSingle(),
         ]);
@@ -221,6 +232,32 @@ export async function guardarCotizacion(
           console.warn(`[correo] ${codigo}: sin admins activos a quienes avisar`);
           return;
         }
+
+        // PDF preliminar (con franja "pendiente de aprobación") para que
+        // administración revise sin entrar al sistema. Si la generación
+        // falla, el aviso sale igual, solo que sin adjunto.
+        let adjuntos: { nombre: string; contenido: Buffer }[] | undefined;
+        try {
+          const pdf = await generarPdfCotizacion({
+            codigo,
+            proyecto,
+            moneda,
+            feePorcentaje,
+            fechaEnvioCliente,
+            cliente: {
+              nombre: cliente?.nombre_comercial ?? '—',
+              razonSocial: cliente?.razon_social ?? '—',
+              ruc: cliente?.ruc ?? '',
+            },
+            ejecutivo,
+            lineas: lineasPdf,
+            preliminar: true,
+          });
+          adjuntos = [{ nombre: `${codigo}-preliminar.pdf`, contenido: pdf }];
+        } catch (e) {
+          console.error(`[correo] ${codigo}: no se pudo generar el PDF preliminar:`, e);
+        }
+
         const resultado = await enviarCorreoInterno({
           para: correos,
           asunto: `⏳ ${codigo} pendiente de aprobación · ${cliente?.nombre_comercial ?? ''}`,
@@ -234,8 +271,9 @@ export async function guardarCotizacion(
                <tr><td style="color:#828B83;padding-right:14px;">Monto neto</td><td style="font-family:monospace;">${formatearMonto(totales.neto, moneda)}</td></tr>
                <tr><td style="color:#828B83;padding-right:14px;">Total</td><td style="font-family:monospace;"><b>${formatearMonto(totales.total, moneda)}</b></td></tr>
              </table>
-             <p style="font-size:13px;">Entra al sistema, sección <b>Aprobaciones</b>, para revisarla.</p>`,
+             <p style="font-size:13px;">${adjuntos ? 'Va adjunta la <b>vista preliminar en PDF</b> para tu revisión. ' : ''}Para aprobarla u observarla, entra al sistema, sección <b>Aprobaciones</b>.</p>`,
           ),
+          adjuntos,
         });
         // Visible en la terminal del servidor: éxito o causa exacta del fallo
         console.log(`[correo] aviso de ${codigo} a admin → ${resultado.detalle}`);

@@ -29,6 +29,9 @@ export type DatosPdf = {
     precio: number;
     subtotal: number;
   }[];
+  // true = vista para revisión de administración (aún sin aprobar):
+  // lleva una franja que la distingue del documento oficial.
+  preliminar?: boolean;
 };
 
 const VERDE = '#0E7C66';
@@ -130,6 +133,18 @@ const s = StyleSheet.create({
     fontSize: 7.5,
     color: GRIS,
   },
+  franjaPreliminar: {
+    backgroundColor: '#F6ECD2',
+    color: '#8A6414',
+    fontSize: 8,
+    fontFamily: 'Helvetica-Bold',
+    letterSpacing: 1,
+    textAlign: 'center',
+    textTransform: 'uppercase',
+    paddingVertical: 6,
+    borderRadius: 4,
+    marginBottom: 14,
+  },
 });
 
 const fechaLarga = (iso: string | null) =>
@@ -171,6 +186,13 @@ function DocumentoCotizacion({ d }: { d: DatosPdf }) {
           }
           fixed
         />
+
+        {d.preliminar && (
+          <Text style={s.franjaPreliminar}>
+            Vista preliminar · pendiente de aprobación — no es el documento
+            oficial
+          </Text>
+        )}
 
         <View style={s.cabecera}>
           <View>
