@@ -10,13 +10,13 @@ import type { Moneda } from '@/lib/calculos';
 // Cola de aprobación: una cotización a la vez, de la más antigua a la más
 // nueva. Al resolver una, pasa automáticamente a la siguiente.
 export default async function PaginaAprobaciones() {
-  await exigirRol(['admin', 'gerencia']);
+  const { usuario } = await exigirRol(['admin', 'gerencia']);
 
   const supabase = await crearClienteServidor();
   const { data } = await supabase
     .from('cotizaciones')
     .select(
-      `id, codigo, proyecto, moneda, fee_porcentaje, fecha_envio_cliente,
+      `id, codigo, proyecto, moneda, fee_porcentaje, fecha_envio_cliente, ejecutivo_id,
        cliente:clientes(nombre_comercial, razon_social),
        ejecutivo:usuarios!cotizaciones_ejecutivo_id_fkey(nombre),
        items:cotizacion_items(orden, proveedor_nombre, descripcion, cantidad, precio_unitario, subtotal)`,
@@ -31,6 +31,7 @@ export default async function PaginaAprobaciones() {
     return {
       id: c.id as string,
       codigo: c.codigo as string,
+      ejecutivoId: c.ejecutivo_id as string,
       proyecto: c.proyecto as string,
       moneda: c.moneda as Moneda,
       feePorcentaje: Number(c.fee_porcentaje),
@@ -63,7 +64,7 @@ export default async function PaginaAprobaciones() {
           ningún correo va al cliente.
         </p>
       </div>
-      <ColaAprobacion pendientes={pendientes} />
+      <ColaAprobacion pendientes={pendientes} usuarioId={usuario.id} />
     </div>
   );
 }

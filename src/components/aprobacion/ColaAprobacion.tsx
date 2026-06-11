@@ -12,6 +12,7 @@ import { EMPRESA } from '@/config/empresa';
 export type PendienteAprobacion = {
   id: string;
   codigo: string;
+  ejecutivoId: string;
   proyecto: string;
   moneda: Moneda;
   feePorcentaje: number;
@@ -35,8 +36,10 @@ type Resuelta =
 
 export function ColaAprobacion({
   pendientes,
+  usuarioId,
 }: {
   pendientes: PendienteAprobacion[];
+  usuarioId: string;
 }) {
   const router = useRouter();
   const [resuelta, setResuelta] = useState<Resuelta | null>(null);
@@ -45,28 +48,47 @@ export function ColaAprobacion({
   const [error, setError] = useState<string | null>(null);
   const [procesando, startTransition] = useTransition();
 
-  // Siempre se atiende la primera de la cola; al resolverla, el refresh
+  // Control interno: nadie aprueba lo que él mismo cotizó, así que las
+  // propias no entran a la fila de quien revisa (las resuelve otro admin).
+  const revisables = pendientes.filter((p) => p.ejecutivoId !== usuarioId);
+  const propias = pendientes.length - revisables.length;
+
+  // Siempre se atiende la primera de la fila; al resolverla, el refresh
   // del servidor trae la siguiente automáticamente.
-  const actual = pendientes[0];
+  const actual = revisables[0];
+
+  const avisoPropias = propias > 0 && (
+    <div className="mb-4 max-w-3xl rounded-[10px] border border-ambar/30 bg-ambar-fondo px-4 py-3 text-[13px] text-ambar">
+      {propias === 1 ? 'Hay 1 cotización tuya' : `Hay ${propias} cotizaciones tuyas`}{' '}
+      en la cola: por control interno las debe aprobar otro administrador.
+    </div>
+  );
 
   if (!actual) {
     return (
-      <div className="rounded-xl border border-dashed border-linea bg-white p-12 text-center shadow-tarjeta">
-        <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-verde-fondo text-verde">
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.5"
-            className="h-6 w-6"
-          >
-            <path d="M20 6 9 17l-5-5" />
-          </svg>
+      <div>
+        {avisoPropias}
+        <div className="rounded-xl border border-dashed border-linea bg-white p-12 text-center shadow-tarjeta">
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-verde-fondo text-verde">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              className="h-6 w-6"
+            >
+              <path d="M20 6 9 17l-5-5" />
+            </svg>
+          </div>
+          <h2 className="text-[15px] font-bold">
+            {propias > 0 ? 'Nada que revisar por ti' : 'Bandeja vacía'}
+          </h2>
+          <p className="mx-auto mt-1 max-w-xs text-[13px] text-tinta-suave">
+            {propias > 0
+              ? 'Las pendientes restantes son tuyas y las resuelve otro administrador.'
+              : 'No hay cotizaciones pendientes de aprobar. Buen trabajo.'}
+          </p>
         </div>
-        <h2 className="text-[15px] font-bold">Bandeja vacía</h2>
-        <p className="mx-auto mt-1 max-w-xs text-[13px] text-tinta-suave">
-          No hay cotizaciones pendientes de aprobar. Buen trabajo.
-        </p>
       </div>
     );
   }
@@ -114,10 +136,11 @@ export function ColaAprobacion({
 
   return (
     <div className="max-w-3xl">
+      {avisoPropias}
       <div className="mb-4 flex items-center justify-between">
         <span className="text-[12.5px] text-tinta-tenue">
-          Revisando <b>1</b> de <b>{pendientes.length}</b> pendiente
-          {pendientes.length > 1 ? 's' : ''}
+          Revisando <b>1</b> de <b>{revisables.length}</b> pendiente
+          {revisables.length > 1 ? 's' : ''}
         </span>
       </div>
 
@@ -435,7 +458,7 @@ export function ColaAprobacion({
                 onClick={siguiente}
                 className="rounded-lg bg-petroleo px-4 py-2 text-[13px] font-semibold text-white transition hover:bg-petroleo-oscuro"
               >
-                {pendientes.length > 1 ? 'Siguiente pendiente →' : 'Listo'}
+                {revisables.length > 1 ? 'Siguiente pendiente →' : 'Listo'}
               </button>
             </div>
           </div>

@@ -26,7 +26,7 @@ async function cargarPendiente(id: string) {
   const { data: cot } = await supabase
     .from('cotizaciones')
     .select(
-      `id, codigo, estado, proyecto, moneda, fee_porcentaje, fecha_envio_cliente,
+      `id, codigo, estado, proyecto, moneda, fee_porcentaje, fecha_envio_cliente, ejecutivo_id,
        cliente:clientes(nombre_comercial, razon_social, ruc),
        ejecutivo:usuarios!cotizaciones_ejecutivo_id_fkey(nombre, correo),
        items:cotizacion_items(orden, proveedor_nombre, descripcion, cantidad, precio_unitario, subtotal)`,
@@ -53,6 +53,12 @@ export async function aprobarCotizacion(id: string): Promise<ResultadoAprobar> {
   if (!cot) return { error: 'No se encontró la cotización.' };
   if (cot.estado !== 'pendiente')
     return { error: `Esta cotización ya fue resuelta (estado: ${cot.estado}).` };
+  // Control interno: nadie aprueba lo que él mismo cotizó.
+  if (cot.ejecutivo_id === usuario.id)
+    return {
+      error:
+        'Control interno: esta cotización la creaste tú, debe aprobarla otro administrador.',
+    };
 
   const cliente = uno(
     cot.cliente as { nombre_comercial: string; razon_social: string; ruc: string }[] | null,
