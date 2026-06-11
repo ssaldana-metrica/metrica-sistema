@@ -37,9 +37,12 @@ type Resuelta =
 export function ColaAprobacion({
   pendientes,
   usuarioId,
+  sinRestriccion,
 }: {
   pendientes: PendienteAprobacion[];
   usuarioId: string;
+  // Gerencia: exenta del control de autoaprobación, revisa también lo suyo.
+  sinRestriccion: boolean;
 }) {
   const router = useRouter();
   const [resuelta, setResuelta] = useState<Resuelta | null>(null);
@@ -48,9 +51,11 @@ export function ColaAprobacion({
   const [error, setError] = useState<string | null>(null);
   const [procesando, startTransition] = useTransition();
 
-  // Control interno: nadie aprueba lo que él mismo cotizó, así que las
-  // propias no entran a la fila de quien revisa (las resuelve otro admin).
-  const revisables = pendientes.filter((p) => p.ejecutivoId !== usuarioId);
+  // Control interno: un admin no aprueba lo que él mismo cotizó, así que
+  // sus propias no entran a su fila (las resuelve otro admin o gerencia).
+  const revisables = sinRestriccion
+    ? pendientes
+    : pendientes.filter((p) => p.ejecutivoId !== usuarioId);
   const propias = pendientes.length - revisables.length;
 
   // Siempre se atiende la primera de la fila; al resolverla, el refresh

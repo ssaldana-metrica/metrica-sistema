@@ -53,8 +53,10 @@ export async function aprobarCotizacion(id: string): Promise<ResultadoAprobar> {
   if (!cot) return { error: 'No se encontró la cotización.' };
   if (cot.estado !== 'pendiente')
     return { error: `Esta cotización ya fue resuelta (estado: ${cot.estado}).` };
-  // Control interno: nadie aprueba lo que él mismo cotizó.
-  if (cot.ejecutivo_id === usuario.id)
+  // Control interno: un admin no aprueba lo que él mismo cotizó. Gerencia
+  // queda exenta — supervisa todo el sistema y necesita probar el flujo
+  // completo sin restricciones.
+  if (cot.ejecutivo_id === usuario.id && usuario.rol !== 'gerencia')
     return {
       error:
         'Control interno: esta cotización la creaste tú, debe aprobarla otro administrador.',

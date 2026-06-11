@@ -64,7 +64,11 @@ export default async function PaginaAprobaciones() {
           ningún correo va al cliente.
         </p>
       </div>
-      <ColaAprobacion pendientes={pendientes} usuarioId={usuario.id} />
+      <ColaAprobacion
+        pendientes={pendientes}
+        usuarioId={usuario.id}
+        sinRestriccion={usuario.rol === 'gerencia'}
+      />
     </div>
   );
 }
