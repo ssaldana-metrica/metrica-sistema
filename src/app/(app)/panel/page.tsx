@@ -3,6 +3,7 @@ import { obtenerSesion } from '@/lib/auth';
 import { crearClienteServidor } from '@/lib/supabase/server';
 import { uno } from '@/lib/util';
 import { BadgeEstado } from '@/components/ui/BadgeEstado';
+import { BotonPdf } from '@/components/ui/BotonPdf';
 
 export default async function Panel() {
   const sesion = await obtenerSesion();
@@ -32,7 +33,7 @@ export default async function Panel() {
     supabase
       .from('cotizaciones')
       .select(
-        'id, codigo, proyecto, estado, cliente:clientes(nombre_comercial), ejecutivo:usuarios!cotizaciones_ejecutivo_id_fkey(nombre)',
+        'id, codigo, proyecto, estado, pdf_url, cliente:clientes(nombre_comercial), ejecutivo:usuarios!cotizaciones_ejecutivo_id_fkey(nombre)',
       )
       .order('updated_at', { ascending: false })
       .limit(5),
@@ -85,6 +86,7 @@ export default async function Panel() {
               <th className="px-5 py-3 font-semibold">Proyecto</th>
               <th className="px-5 py-3 font-semibold">Ejecutivo</th>
               <th className="px-5 py-3 font-semibold">Estado</th>
+              <th className="px-5 py-3 font-semibold">PDF</th>
             </tr>
           </thead>
           <tbody>
@@ -113,12 +115,17 @@ export default async function Panel() {
                 <td className="px-5 py-3">
                   <BadgeEstado estado={c.estado as string} />
                 </td>
+                <td className="px-5 py-3">
+                  <BotonPdf
+                    href={c.pdf_url ? `/cotizaciones/${c.id as string}/pdf` : null}
+                  />
+                </td>
               </tr>
             ))}
             {(recientes.data ?? []).length === 0 && (
               <tr>
                 <td
-                  colSpan={5}
+                  colSpan={6}
                   className="px-5 py-8 text-center text-[13px] text-tinta-tenue"
                 >
                   Aún no hay cotizaciones. Toma un código del banco para

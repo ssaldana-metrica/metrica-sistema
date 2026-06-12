@@ -3,6 +3,7 @@ import { obtenerSesion } from '@/lib/auth';
 import { crearClienteServidor } from '@/lib/supabase/server';
 import { uno } from '@/lib/util';
 import { BadgeEstado } from '@/components/ui/BadgeEstado';
+import { BotonPdf } from '@/components/ui/BotonPdf';
 import { calcularTotales, formatearMonto, type Moneda } from '@/lib/calculos';
 
 const ESTADOS = [
@@ -37,7 +38,7 @@ export default async function PaginaCotizaciones({
   let consulta = supabase
     .from('cotizaciones')
     .select(
-      `id, codigo, proyecto, estado, moneda, fee_porcentaje, updated_at,
+      `id, codigo, proyecto, estado, moneda, fee_porcentaje, updated_at, pdf_url,
        cliente:clientes!inner(nombre_comercial),
        ejecutivo:usuarios!cotizaciones_ejecutivo_id_fkey(nombre),
        items:cotizacion_items(cantidad, precio_unitario)`,
@@ -70,6 +71,7 @@ export default async function PaginaCotizaciones({
       ejecutivo:
         uno(c.ejecutivo as { nombre: string }[] | null)?.nombre ?? '—',
       total: formatearMonto(totales.total, c.moneda as Moneda),
+      pdfHref: c.pdf_url ? `/cotizaciones/${c.id as string}/pdf` : null,
       actualizada: new Date(c.updated_at as string).toLocaleDateString(
         'es-PE',
         { day: '2-digit', month: 'short', timeZone: 'America/Lima' },
@@ -159,6 +161,7 @@ export default async function PaginaCotizaciones({
               )}
               <th className="px-5 py-3 text-right font-semibold">Total</th>
               <th className="px-5 py-3 font-semibold">Estado</th>
+              <th className="px-5 py-3 font-semibold">PDF</th>
               <th className="px-5 py-3 font-semibold">Actualizada</th>
             </tr>
           </thead>
@@ -185,13 +188,16 @@ export default async function PaginaCotizaciones({
                 <td className="px-5 py-3">
                   <BadgeEstado estado={f.estado} />
                 </td>
+                <td className="px-5 py-3">
+                  <BotonPdf href={f.pdfHref} />
+                </td>
                 <td className="px-5 py-3 text-tinta-suave">{f.actualizada}</td>
               </tr>
             ))}
             {filas.length === 0 && (
               <tr>
                 <td
-                  colSpan={esAdmin ? 7 : 6}
+                  colSpan={esAdmin ? 8 : 7}
                   className="px-5 py-10 text-center text-[13px] text-tinta-tenue"
                 >
                   {buscado || estado

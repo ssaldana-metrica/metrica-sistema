@@ -143,7 +143,13 @@ export async function aprobarCotizacion(id: string): Promise<ResultadoAprobar> {
          <tr><td style="color:#828B83;padding-right:14px;">Cliente</td><td><b>${escaparHtml(cliente.nombre_comercial)}</b></td></tr>
          <tr><td style="color:#828B83;padding-right:14px;">Proyecto</td><td>${escaparHtml(cot.proyecto as string)}</td></tr>
          <tr><td style="color:#828B83;padding-right:14px;">Total</td><td style="font-family:monospace;"><b>${formatearMonto(totales.total, cot.moneda as Moneda)}</b></td></tr>
-       </table>`,
+       </table>
+       <p style="font-size:13px;font-weight:bold;margin-bottom:6px;">Qué sigue:</p>
+       <ol style="font-size:13px;margin:0 0 14px;padding-left:20px;">
+         <li style="margin-bottom:4px;">Revisa el PDF adjunto — es el documento oficial aprobado.</li>
+         <li style="margin-bottom:4px;">Envíaselo al cliente desde tu correo.</li>
+         <li>Cuando el cliente confirme, llena la <b>ficha de apertura del proyecto</b> para activarlo.</li>
+       </ol>`,
     ),
     adjuntos: [{ nombre: `${cot.codigo}.pdf`, contenido: pdf }],
   });
