@@ -23,6 +23,7 @@ export default async function PaginaFicha({
       `id, codigo, estado, cliente_nombre, cliente_ruc, politica_pago,
        contacto_aprobacion, correo_contacto, inicio_acciones, fin_acciones,
        facturar_antes_del_fin, moneda, observaciones_ejecutivo,
+       num_factura_cliente, oc_cliente, hes, fecha_emision_factura, total_seguimiento,
        cotizacion:cotizaciones!inner(
          id, codigo, proyecto, ejecutivo_id,
          ejecutivo:usuarios!cotizaciones_ejecutivo_id_fkey(nombre)
@@ -35,7 +36,9 @@ export default async function PaginaFicha({
   const { data: provs } = await supabase
     .from('ficha_proveedores')
     .select(
-      'orden, agencia, influencer_proveedor, ruc, descripcion, monto, banco, cuenta_cci, email_proveedor',
+      `id, orden, agencia, influencer_proveedor, ruc, descripcion, monto, banco,
+       cuenta_cci, email_proveedor, num_oc, num_factura, fecha_emision,
+       total, moneda_total, importe, moneda_importe, pago_fraccionado`,
     )
     .eq('ficha_id', id)
     .order('orden');
@@ -87,6 +90,33 @@ export default async function PaginaFicha({
         banco: (p.banco as string) ?? '',
         cuentaCci: (p.cuenta_cci as string) ?? '',
         emailProveedor: (p.email_proveedor as string) ?? '',
+      }))}
+      seguimientoCliente={{
+        numFacturaCliente: (ficha.num_factura_cliente as string) ?? '',
+        ocCliente: (ficha.oc_cliente as string) ?? '',
+        hes: (ficha.hes as string) ?? '',
+        fechaEmisionFactura:
+          (ficha.fecha_emision_factura as string | null) ?? null,
+        totalSeguimiento:
+          ficha.total_seguimiento != null
+            ? String(ficha.total_seguimiento)
+            : '',
+      }}
+      seguimientoProveedores={(provs ?? []).map((p) => ({
+        id: p.id as string,
+        etiqueta:
+          (p.agencia as string) ||
+          (p.influencer_proveedor as string) ||
+          (p.descripcion as string) ||
+          `Proveedor ${p.orden as number}`,
+        numOc: (p.num_oc as string) ?? '',
+        numFactura: (p.num_factura as string) ?? '',
+        fechaEmision: (p.fecha_emision as string | null) ?? null,
+        total: p.total != null ? String(p.total) : '',
+        monedaTotal: (p.moneda_total as Moneda) ?? 'PEN',
+        importe: p.importe != null ? String(p.importe) : '',
+        monedaImporte: (p.moneda_importe as Moneda) ?? 'PEN',
+        pagoFraccionado: Boolean(p.pago_fraccionado),
       }))}
     />
   );

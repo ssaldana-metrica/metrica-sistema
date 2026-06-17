@@ -5,12 +5,35 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   guardarFichaEjecutivo,
+  guardarSeguimientoAdmin,
   marcarListaEjecutivo,
   type DatosEjecutivo,
   type FichaProveedorEntrada,
 } from '@/actions/fichas';
 import { BadgeEstado } from '@/components/ui/BadgeEstado';
 import { formatearMonto, redondear, type Moneda } from '@/lib/calculos';
+
+// Filas del seguimiento del admin (números como texto en el formulario).
+type SeguimientoClienteFila = {
+  numFacturaCliente: string;
+  ocCliente: string;
+  hes: string;
+  fechaEmisionFactura: string | null;
+  totalSeguimiento: string;
+};
+type SeguimientoProvFila = {
+  id: string;
+  etiqueta: string;
+  numOc: string;
+  numFactura: string;
+  fechaEmision: string | null;
+  total: string;
+  monedaTotal: Moneda;
+  importe: string;
+  monedaImporte: Moneda;
+  pagoFraccionado: boolean;
+};
+const numOnull = (v: string) => (v.trim() ? parseFloat(v) || 0 : null);
 
 type ProveedorFila = {
   agencia: string;
@@ -46,6 +69,8 @@ export type FichaEditorProps = {
   esAdmin: boolean;
   inicial: DatosEjecutivo;
   proveedoresIniciales: ProveedorFila[];
+  seguimientoCliente: SeguimientoClienteFila;
+  seguimientoProveedores: SeguimientoProvFila[];
 };
 
 export function FichaEditor(props: FichaEditorProps) {
@@ -61,8 +86,16 @@ export function FichaEditor(props: FichaEditorProps) {
       ? props.proveedoresIniciales
       : [filaVacia()],
   );
+  const [segCliente, setSegCliente] = useState<SeguimientoClienteFila>(
+    props.seguimientoCliente,
+  );
+  const [segProvs, setSegProvs] = useState<SeguimientoProvFila[]>(
+    props.seguimientoProveedores,
+  );
 
   const editable = props.puedeEditar;
+  // El seguimiento se edita cuando el ejecutivo ya marcó su parte lista.
+  const adminEditable = props.esAdmin && props.estado === 'lista_ejecutivo';
 
   const fijar = <K extends keyof DatosEjecutivo>(k: K, v: DatosEjecutivo[K]) =>
     setDatos((d) => ({ ...d, [k]: v }));
@@ -122,6 +155,47 @@ export function FichaEditor(props: FichaEditorProps) {
       const r = await marcarListaEjecutivo(props.fichaId, datos, aEntrada());
       if ('error' in r) setError(r.error);
       else router.refresh();
+    });
+  }
+
+  const fijarSegCliente = (k: keyof SeguimientoClienteFila, v: string) =>
+    setSegCliente((s) => ({ ...s, [k]: v }));
+  const fijarSegProv = (
+    i: number,
+    k: keyof SeguimientoProvFila,
+    v: string | boolean,
+  ) => setSegProvs((ps) => ps.map((p, j) => (j === i ? { ...p, [k]: v } : p)));
+
+  function guardarSeguimiento() {
+    setError(null);
+    setAviso(null);
+    startTransition(async () => {
+      const r = await guardarSeguimientoAdmin(
+        props.fichaId,
+        {
+          numFacturaCliente: segCliente.numFacturaCliente,
+          ocCliente: segCliente.ocCliente,
+          hes: segCliente.hes,
+          fechaEmisionFactura: segCliente.fechaEmisionFactura,
+          totalSeguimiento: numOnull(segCliente.totalSeguimiento),
+        },
+        segProvs.map((p) => ({
+          id: p.id,
+          numOc: p.numOc,
+          numFactura: p.numFactura,
+          fechaEmision: p.fechaEmision,
+          total: numOnull(p.total),
+          monedaTotal: p.monedaTotal,
+          importe: numOnull(p.importe),
+          monedaImporte: p.monedaImporte,
+          pagoFraccionado: p.pagoFraccionado,
+        })),
+      );
+      if ('error' in r) setError(r.error);
+      else {
+        setAviso('Seguimiento guardado.');
+        router.refresh();
+      }
     });
   }
 
@@ -457,12 +531,175 @@ export function FichaEditor(props: FichaEditorProps) {
           )}
         </div>
       ) : (
-        <Tarjeta titulo="Seguimiento de administración">
-          <p className="text-[13px] text-tinta-suave">
-            El seguimiento (N° de factura, OC, HES, importes por proveedor y el
-            cierre de la ficha) se construye en el siguiente bloque.
-          </p>
-        </Tarjeta>
+        <div className="space-y-5">
+          {props.estado === 'en_proceso' && (
+            <div className="rounded-[10px] border border-ambar/30 bg-ambar-fondo px-4 py-3 text-[12.5px] text-ambar">
+              El seguimiento se habilita cuando el ejecutivo marque su parte
+              como lista.
+            </div>
+          )}
+          {props.estado === 'completa' && (
+            <div className="rounded-[10px] border border-verde/30 bg-verde-fondo px-4 py-3 text-[12.5px] text-verde">
+              Ficha completa. El seguimiento es solo lectura; para cambiarlo,
+              reabre la ficha.
+            </div>
+          )}
+
+          {/* Seguimiento a nivel cliente */}
+          <Tarjeta titulo="Seguimiento del cliente">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Campo label="N° factura al cliente">
+                <input
+                  value={segCliente.numFacturaCliente}
+                  disabled={!adminEditable}
+                  onChange={(e) =>
+                    fijarSegCliente('numFacturaCliente', e.target.value)
+                  }
+                  className={inputCls}
+                />
+              </Campo>
+              <Campo label="OC del cliente">
+                <input
+                  value={segCliente.ocCliente}
+                  disabled={!adminEditable}
+                  onChange={(e) => fijarSegCliente('ocCliente', e.target.value)}
+                  className={inputCls}
+                />
+              </Campo>
+              <Campo label="HES">
+                <input
+                  value={segCliente.hes}
+                  disabled={!adminEditable}
+                  onChange={(e) => fijarSegCliente('hes', e.target.value)}
+                  className={inputCls}
+                />
+              </Campo>
+              <Campo label="Fecha de emisión de factura">
+                <input
+                  type="date"
+                  value={segCliente.fechaEmisionFactura ?? ''}
+                  disabled={!adminEditable}
+                  onChange={(e) =>
+                    fijarSegCliente('fechaEmisionFactura', e.target.value)
+                  }
+                  className={inputCls}
+                />
+              </Campo>
+              <Campo label={`Total (${monedaTexto(datos.moneda)})`}>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={segCliente.totalSeguimiento}
+                  disabled={!adminEditable}
+                  onChange={(e) =>
+                    fijarSegCliente('totalSeguimiento', e.target.value)
+                  }
+                  className={`${inputCls} text-right font-mono`}
+                />
+              </Campo>
+            </div>
+          </Tarjeta>
+
+          {/* Seguimiento por proveedor (moneda por línea) */}
+          <Tarjeta titulo="Seguimiento por proveedor">
+            {segProvs.length === 0 ? (
+              <p className="text-[13px] text-tinta-suave">
+                Esta ficha aún no tiene proveedores cargados por el ejecutivo.
+              </p>
+            ) : (
+              <div className="space-y-4">
+                {segProvs.map((p, i) => (
+                  <div
+                    key={p.id}
+                    className="rounded-lg border border-linea-suave p-4"
+                  >
+                    <div className="mb-3 flex items-center justify-between">
+                      <span className="text-[13px] font-semibold">
+                        {p.etiqueta}
+                      </span>
+                      <label className="flex items-center gap-2 text-[12.5px]">
+                        <input
+                          type="checkbox"
+                          checked={p.pagoFraccionado}
+                          disabled={!adminEditable}
+                          onChange={(e) =>
+                            fijarSegProv(i, 'pagoFraccionado', e.target.checked)
+                          }
+                          className="h-4 w-4 rounded border-linea"
+                        />
+                        Pago fraccionado
+                      </label>
+                    </div>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                      <Campo label="N° OC">
+                        <input
+                          value={p.numOc}
+                          disabled={!adminEditable}
+                          onChange={(e) =>
+                            fijarSegProv(i, 'numOc', e.target.value)
+                          }
+                          className={inputCls}
+                        />
+                      </Campo>
+                      <Campo label="N° factura">
+                        <input
+                          value={p.numFactura}
+                          disabled={!adminEditable}
+                          onChange={(e) =>
+                            fijarSegProv(i, 'numFactura', e.target.value)
+                          }
+                          className={inputCls}
+                        />
+                      </Campo>
+                      <Campo label="Fecha de emisión">
+                        <input
+                          type="date"
+                          value={p.fechaEmision ?? ''}
+                          disabled={!adminEditable}
+                          onChange={(e) =>
+                            fijarSegProv(i, 'fechaEmision', e.target.value)
+                          }
+                          className={inputCls}
+                        />
+                      </Campo>
+                      <Campo label="Total">
+                        <MontoMoneda
+                          valor={p.total}
+                          moneda={p.monedaTotal}
+                          disabled={!adminEditable}
+                          onValor={(v) => fijarSegProv(i, 'total', v)}
+                          onMoneda={(m) => fijarSegProv(i, 'monedaTotal', m)}
+                        />
+                      </Campo>
+                      <Campo label="Importe del proveedor">
+                        <MontoMoneda
+                          valor={p.importe}
+                          moneda={p.monedaImporte}
+                          disabled={!adminEditable}
+                          onValor={(v) => fijarSegProv(i, 'importe', v)}
+                          onMoneda={(m) => fijarSegProv(i, 'monedaImporte', m)}
+                        />
+                      </Campo>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Tarjeta>
+
+          {adminEditable && (
+            <div className="flex justify-end">
+              <button
+                onClick={guardarSeguimiento}
+                disabled={guardando}
+                className="rounded-lg bg-petroleo px-4 py-2 text-[13px] font-semibold text-white transition hover:bg-petroleo-oscuro disabled:opacity-60"
+              >
+                {guardando ? 'Guardando…' : 'Guardar seguimiento'}
+              </button>
+            </div>
+          )}
+        </div>
       )}
     </div>
   );
@@ -474,6 +711,45 @@ const celdaCls =
   'w-full rounded-md border border-linea bg-white px-2 py-1.5 text-[12.5px] outline-none focus:border-petroleo disabled:bg-superficie disabled:text-tinta-suave';
 
 const monedaTexto = (m: Moneda) => (m === 'PEN' ? 'soles' : 'dólares');
+
+// Monto con su propio selector de moneda (para el seguimiento del admin,
+// donde el monto real puede ser PEN o USD distinto a la moneda general).
+function MontoMoneda({
+  valor,
+  moneda,
+  disabled,
+  onValor,
+  onMoneda,
+}: {
+  valor: string;
+  moneda: Moneda;
+  disabled: boolean;
+  onValor: (v: string) => void;
+  onMoneda: (m: Moneda) => void;
+}) {
+  return (
+    <div className="mt-1 flex gap-2">
+      <select
+        value={moneda}
+        disabled={disabled}
+        onChange={(e) => onMoneda(e.target.value as Moneda)}
+        className="rounded-md border border-linea bg-white px-2 py-2 text-[12.5px] outline-none focus:border-petroleo disabled:bg-superficie disabled:text-tinta-suave"
+      >
+        <option value="PEN">S/</option>
+        <option value="USD">$</option>
+      </select>
+      <input
+        type="number"
+        min="0"
+        step="0.01"
+        value={valor}
+        disabled={disabled}
+        onChange={(e) => onValor(e.target.value)}
+        className="w-full rounded-md border border-linea bg-white px-3 py-2 text-right font-mono text-[13px] outline-none focus:border-petroleo disabled:bg-superficie disabled:text-tinta-suave"
+      />
+    </div>
+  );
+}
 
 function Tab({
   activa,

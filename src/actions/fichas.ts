@@ -29,6 +29,26 @@ export type DatosEjecutivo = {
   observacionesEjecutivo: string;
 };
 
+export type DatosSeguimientoCliente = {
+  numFacturaCliente: string;
+  ocCliente: string;
+  hes: string;
+  fechaEmisionFactura: string | null;
+  totalSeguimiento: number | null;
+};
+
+export type SeguimientoProveedor = {
+  id: string; // ficha_proveedores.id
+  numOc: string;
+  numFactura: string;
+  fechaEmision: string | null;
+  total: number | null;
+  monedaTotal: Moneda;
+  importe: number | null;
+  monedaImporte: Moneda;
+  pagoFraccionado: boolean;
+};
+
 type Resultado = { ok: true } | { error: string };
 
 const MAX_PROVEEDORES = 60;
@@ -192,6 +212,71 @@ export async function marcarListaEjecutivo(
     .eq('id', fichaId)
     .eq('estado', 'en_proceso');
   if (errEstado) return { error: 'No se pudo marcar como lista.' };
+
+  revalidatePath(`/fichas/${fichaId}`);
+  revalidatePath('/fichas');
+  return { ok: true };
+}
+
+// GUARDAR SEGUIMIENTO (solo admin/gerencia): datos a nivel cliente y, por cada
+// proveedor existente, su seguimiento con moneda por línea. Editable mientras
+// la ficha está en 'lista_ejecutivo' (el ejecutivo ya cerró su parte y aún no
+// se cierra la ficha). Actualiza las filas en su sitio, sin recrearlas.
+export async function guardarSeguimientoAdmin(
+  fichaId: string,
+  cliente: DatosSeguimientoCliente,
+  proveedores: SeguimientoProveedor[],
+): Promise<Resultado> {
+  const sesion = await obtenerSesion();
+  if (!sesion) return { error: 'Sesión expirada. Vuelve a entrar.' };
+  if (!['admin', 'gerencia'].includes(sesion.usuario.rol))
+    return { error: 'Solo administración puede registrar el seguimiento.' };
+
+  const supabase = await crearClienteServidor();
+  const { data: ficha } = await supabase
+    .from('fichas_apertura')
+    .select('estado')
+    .eq('id', fichaId)
+    .maybeSingle();
+  if (!ficha) return { error: 'No se encontró la ficha.' };
+  if (ficha.estado !== 'lista_ejecutivo')
+    return {
+      error:
+        'El seguimiento se edita cuando el ejecutivo marcó su parte lista y antes de cerrar la ficha.',
+    };
+
+  const { error: errCliente } = await supabase
+    .from('fichas_apertura')
+    .update({
+      num_factura_cliente: cliente.numFacturaCliente.trim(),
+      oc_cliente: cliente.ocCliente.trim(),
+      hes: cliente.hes.trim(),
+      fecha_emision_factura: fechaOnull(cliente.fechaEmisionFactura),
+      total_seguimiento: cliente.totalSeguimiento,
+    })
+    .eq('id', fichaId);
+  if (errCliente)
+    return { error: 'No se pudo guardar el seguimiento del cliente.' };
+
+  // Actualiza cada proveedor por id (acotado a esta ficha por seguridad).
+  for (const p of proveedores) {
+    const { error } = await supabase
+      .from('ficha_proveedores')
+      .update({
+        num_oc: p.numOc.trim(),
+        num_factura: p.numFactura.trim(),
+        fecha_emision: fechaOnull(p.fechaEmision),
+        total: p.total,
+        moneda_total: p.monedaTotal,
+        importe: p.importe,
+        moneda_importe: p.monedaImporte,
+        pago_fraccionado: p.pagoFraccionado,
+      })
+      .eq('id', p.id)
+      .eq('ficha_id', fichaId);
+    if (error)
+      return { error: 'No se pudo guardar el seguimiento de un proveedor.' };
+  }
 
   revalidatePath(`/fichas/${fichaId}`);
   revalidatePath('/fichas');
