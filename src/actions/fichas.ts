@@ -3,6 +3,8 @@
 import { revalidatePath } from 'next/cache';
 import { obtenerSesion } from '@/lib/auth';
 import { crearClienteServidor } from '@/lib/supabase/server';
+import { crearClienteAdmin } from '@/lib/supabase/admin';
+import { generarPdfFicha } from '@/lib/pdf-ficha';
 import type { Moneda } from '@/lib/calculos';
 
 export type FichaProveedorEntrada = {
@@ -245,6 +247,26 @@ export async function guardarSeguimientoAdmin(
         'El seguimiento se edita cuando el ejecutivo marcó su parte lista y antes de cerrar la ficha.',
     };
 
+  const errSeg = await persistirSeguimiento(
+    supabase,
+    fichaId,
+    cliente,
+    proveedores,
+  );
+  if (errSeg) return { error: errSeg };
+
+  revalidatePath(`/fichas/${fichaId}`);
+  revalidatePath('/fichas');
+  return { ok: true };
+}
+
+// Guarda el seguimiento (cliente + por proveedor) en su sitio, sin recrear.
+async function persistirSeguimiento(
+  supabase: Supa,
+  fichaId: string,
+  cliente: DatosSeguimientoCliente,
+  proveedores: SeguimientoProveedor[],
+): Promise<string | null> {
   const { error: errCliente } = await supabase
     .from('fichas_apertura')
     .update({
@@ -255,10 +277,8 @@ export async function guardarSeguimientoAdmin(
       total_seguimiento: cliente.totalSeguimiento,
     })
     .eq('id', fichaId);
-  if (errCliente)
-    return { error: 'No se pudo guardar el seguimiento del cliente.' };
+  if (errCliente) return 'No se pudo guardar el seguimiento del cliente.';
 
-  // Actualiza cada proveedor por id (acotado a esta ficha por seguridad).
   for (const p of proveedores) {
     const { error } = await supabase
       .from('ficha_proveedores')
@@ -274,9 +294,179 @@ export async function guardarSeguimientoAdmin(
       })
       .eq('id', p.id)
       .eq('ficha_id', fichaId);
-    if (error)
-      return { error: 'No se pudo guardar el seguimiento de un proveedor.' };
+    if (error) return 'No se pudo guardar el seguimiento de un proveedor.';
   }
+  return null;
+}
+
+// Arma los datos y genera el PDF de la ficha, lo sube al bucket privado y
+// devuelve la ruta de almacenamiento. Lee con el cliente admin para tener
+// todos los campos sin depender del RLS.
+async function generarYGuardarPdf(
+  admin: ReturnType<typeof crearClienteAdmin>,
+  fichaId: string,
+): Promise<{ ruta: string } | { error: string }> {
+  const { data: f } = await admin
+    .from('fichas_apertura')
+    .select('*')
+    .eq('id', fichaId)
+    .maybeSingle();
+  if (!f) return { error: 'No se encontró la ficha.' };
+
+  const { data: provs } = await admin
+    .from('ficha_proveedores')
+    .select('*')
+    .eq('ficha_id', fichaId)
+    .order('orden');
+
+  let pdf: Buffer;
+  try {
+    pdf = await generarPdfFicha({
+      codigo: f.codigo as string,
+      cliente: {
+        nombre: (f.cliente_nombre as string) ?? '',
+        ruc: (f.cliente_ruc as string) ?? '',
+        politicaPago: (f.politica_pago as string) ?? '',
+        contacto: (f.contacto_aprobacion as string) ?? '',
+        correo: (f.correo_contacto as string) ?? '',
+      },
+      servicio: {
+        inicio: (f.inicio_acciones as string | null) ?? null,
+        fin: (f.fin_acciones as string | null) ?? null,
+        facturarAntes: Boolean(f.facturar_antes_del_fin),
+        moneda: f.moneda as Moneda,
+        observaciones: (f.observaciones_ejecutivo as string) ?? '',
+      },
+      seguimientoCliente: {
+        numFactura: (f.num_factura_cliente as string) ?? '',
+        oc: (f.oc_cliente as string) ?? '',
+        hes: (f.hes as string) ?? '',
+        fechaEmision: (f.fecha_emision_factura as string | null) ?? null,
+        total: f.total_seguimiento != null ? Number(f.total_seguimiento) : null,
+      },
+      proveedores: (provs ?? []).map((p) => ({
+        orden: p.orden as number,
+        agencia: (p.agencia as string) ?? '',
+        influencer: (p.influencer_proveedor as string) ?? '',
+        ruc: (p.ruc as string) ?? '',
+        descripcion: (p.descripcion as string) ?? '',
+        monto: Number(p.monto) || 0,
+        banco: (p.banco as string) ?? '',
+        cuentaCci: (p.cuenta_cci as string) ?? '',
+        numOc: (p.num_oc as string) ?? '',
+        numFactura: (p.num_factura as string) ?? '',
+        total: p.total != null ? Number(p.total) : null,
+        monedaTotal: (p.moneda_total as Moneda) ?? 'PEN',
+        importe: p.importe != null ? Number(p.importe) : null,
+        monedaImporte: (p.moneda_importe as Moneda) ?? 'PEN',
+        pagoFraccionado: Boolean(p.pago_fraccionado),
+      })),
+    });
+  } catch {
+    return { error: 'No se pudo generar el PDF de la ficha.' };
+  }
+
+  const ruta = `${new Date().getFullYear()}/${f.codigo}.pdf`;
+  const { error: errSubida } = await admin.storage
+    .from('fichas')
+    .upload(ruta, pdf, { contentType: 'application/pdf', upsert: true });
+  if (errSubida) return { error: 'No se pudo guardar el PDF en el almacén.' };
+  return { ruta };
+}
+
+export type ResultadoCerrar =
+  | { ok: true; urlDescarga: string | null }
+  | { error: string };
+
+// CERRAR FICHA (solo admin/gerencia): segundo paso del cierre. Guarda el
+// seguimiento, valida lo mínimo, genera el PDF y pasa a 'completa'.
+export async function cerrarFicha(
+  fichaId: string,
+  cliente: DatosSeguimientoCliente,
+  proveedores: SeguimientoProveedor[],
+): Promise<ResultadoCerrar> {
+  const sesion = await obtenerSesion();
+  if (!sesion) return { error: 'Sesión expirada. Vuelve a entrar.' };
+  if (!['admin', 'gerencia'].includes(sesion.usuario.rol))
+    return { error: 'Solo administración puede cerrar la ficha.' };
+
+  const supabase = await crearClienteServidor();
+  const { data: ficha } = await supabase
+    .from('fichas_apertura')
+    .select('estado')
+    .eq('id', fichaId)
+    .maybeSingle();
+  if (!ficha) return { error: 'No se encontró la ficha.' };
+  if (ficha.estado !== 'lista_ejecutivo')
+    return {
+      error:
+        'Solo se puede cerrar una ficha que el ejecutivo marcó como lista.',
+    };
+
+  const errSeg = await persistirSeguimiento(supabase, fichaId, cliente, proveedores);
+  if (errSeg) return { error: errSeg };
+
+  const faltan: string[] = [];
+  if (!cliente.numFacturaCliente.trim()) faltan.push('N° de factura al cliente');
+  if (!cliente.totalSeguimiento || cliente.totalSeguimiento <= 0)
+    faltan.push('total del seguimiento mayor a cero');
+  if (faltan.length > 0)
+    return { error: `Antes de cerrar, completa: ${faltan.join(', ')}.` };
+
+  // Genera y guarda el PDF (con el cliente admin, para Storage).
+  const admin = crearClienteAdmin();
+  const pdf = await generarYGuardarPdf(admin, fichaId);
+  if ('error' in pdf) return { error: pdf.error };
+
+  const { error: errEstado } = await supabase
+    .from('fichas_apertura')
+    .update({
+      estado: 'completa',
+      completada_por: sesion.usuario.id,
+      fecha_completada: new Date().toISOString(),
+      pdf_url: pdf.ruta,
+    })
+    .eq('id', fichaId)
+    .eq('estado', 'lista_ejecutivo'); // candado
+  if (errEstado) return { error: 'No se pudo cerrar la ficha.' };
+
+  const { data: firmado } = await admin.storage
+    .from('fichas')
+    .createSignedUrl(pdf.ruta, 3600);
+
+  revalidatePath(`/fichas/${fichaId}`);
+  revalidatePath('/fichas');
+  return { ok: true, urlDescarga: firmado?.signedUrl ?? null };
+}
+
+// REABRIR (solo admin/gerencia): devuelve la ficha a 'en_proceso' con traza.
+// El PDF queda obsoleto (se regenera al volver a cerrarla).
+export async function reabrirFicha(fichaId: string): Promise<Resultado> {
+  const sesion = await obtenerSesion();
+  if (!sesion) return { error: 'Sesión expirada. Vuelve a entrar.' };
+  if (!['admin', 'gerencia'].includes(sesion.usuario.rol))
+    return { error: 'Solo administración puede reabrir la ficha.' };
+
+  const supabase = await crearClienteServidor();
+  const { data: ficha } = await supabase
+    .from('fichas_apertura')
+    .select('estado')
+    .eq('id', fichaId)
+    .maybeSingle();
+  if (!ficha) return { error: 'No se encontró la ficha.' };
+  if (!['lista_ejecutivo', 'completa'].includes(ficha.estado as string))
+    return { error: 'Esta ficha ya está en proceso.' };
+
+  const { error } = await supabase
+    .from('fichas_apertura')
+    .update({
+      estado: 'en_proceso',
+      reabierta_por: sesion.usuario.id,
+      fecha_reapertura: new Date().toISOString(),
+      pdf_url: null,
+    })
+    .eq('id', fichaId);
+  if (error) return { error: 'No se pudo reabrir la ficha.' };
 
   revalidatePath(`/fichas/${fichaId}`);
   revalidatePath('/fichas');

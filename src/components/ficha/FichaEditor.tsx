@@ -4,9 +4,11 @@ import { useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
+  cerrarFicha,
   guardarFichaEjecutivo,
   guardarSeguimientoAdmin,
   marcarListaEjecutivo,
+  reabrirFicha,
   type DatosEjecutivo,
   type FichaProveedorEntrada,
 } from '@/actions/fichas';
@@ -67,6 +69,7 @@ export type FichaEditorProps = {
   ejecutivo: string;
   puedeEditar: boolean;
   esAdmin: boolean;
+  pdfHref: string | null;
   inicial: DatosEjecutivo;
   proveedoresIniciales: ProveedorFila[];
   seguimientoCliente: SeguimientoClienteFila;
@@ -166,36 +169,64 @@ export function FichaEditor(props: FichaEditorProps) {
     v: string | boolean,
   ) => setSegProvs((ps) => ps.map((p, j) => (j === i ? { ...p, [k]: v } : p)));
 
+  const segClientePayload = () => ({
+    numFacturaCliente: segCliente.numFacturaCliente,
+    ocCliente: segCliente.ocCliente,
+    hes: segCliente.hes,
+    fechaEmisionFactura: segCliente.fechaEmisionFactura,
+    totalSeguimiento: numOnull(segCliente.totalSeguimiento),
+  });
+  const segProvsPayload = () =>
+    segProvs.map((p) => ({
+      id: p.id,
+      numOc: p.numOc,
+      numFactura: p.numFactura,
+      fechaEmision: p.fechaEmision,
+      total: numOnull(p.total),
+      monedaTotal: p.monedaTotal,
+      importe: numOnull(p.importe),
+      monedaImporte: p.monedaImporte,
+      pagoFraccionado: p.pagoFraccionado,
+    }));
+
   function guardarSeguimiento() {
     setError(null);
     setAviso(null);
     startTransition(async () => {
       const r = await guardarSeguimientoAdmin(
         props.fichaId,
-        {
-          numFacturaCliente: segCliente.numFacturaCliente,
-          ocCliente: segCliente.ocCliente,
-          hes: segCliente.hes,
-          fechaEmisionFactura: segCliente.fechaEmisionFactura,
-          totalSeguimiento: numOnull(segCliente.totalSeguimiento),
-        },
-        segProvs.map((p) => ({
-          id: p.id,
-          numOc: p.numOc,
-          numFactura: p.numFactura,
-          fechaEmision: p.fechaEmision,
-          total: numOnull(p.total),
-          monedaTotal: p.monedaTotal,
-          importe: numOnull(p.importe),
-          monedaImporte: p.monedaImporte,
-          pagoFraccionado: p.pagoFraccionado,
-        })),
+        segClientePayload(),
+        segProvsPayload(),
       );
       if ('error' in r) setError(r.error);
       else {
         setAviso('Seguimiento guardado.');
         router.refresh();
       }
+    });
+  }
+
+  function cerrar() {
+    setError(null);
+    setAviso(null);
+    startTransition(async () => {
+      const r = await cerrarFicha(
+        props.fichaId,
+        segClientePayload(),
+        segProvsPayload(),
+      );
+      if ('error' in r) setError(r.error);
+      else router.refresh();
+    });
+  }
+
+  function reabrir() {
+    setError(null);
+    setAviso(null);
+    startTransition(async () => {
+      const r = await reabrirFicha(props.fichaId);
+      if ('error' in r) setError(r.error);
+      else router.refresh();
     });
   }
 
@@ -221,6 +252,27 @@ export function FichaEditor(props: FichaEditorProps) {
           >
             Ver cotización {props.cotizacionCodigo}
           </Link>
+          {props.pdfHref && (
+            <a
+              href={props.pdfHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 rounded-lg border border-linea bg-white px-3.5 py-2 text-[12.5px] font-semibold transition hover:bg-superficie"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                className="h-[15px] w-[15px]"
+              >
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
+              </svg>
+              Descargar PDF
+            </a>
+          )}
           <BadgeEstado estado={props.estado} />
         </div>
       </div>
@@ -688,15 +740,47 @@ export function FichaEditor(props: FichaEditorProps) {
             )}
           </Tarjeta>
 
-          {adminEditable && (
-            <div className="flex justify-end">
-              <button
-                onClick={guardarSeguimiento}
-                disabled={guardando}
-                className="rounded-lg bg-petroleo px-4 py-2 text-[13px] font-semibold text-white transition hover:bg-petroleo-oscuro disabled:opacity-60"
-              >
-                {guardando ? 'Guardando…' : 'Guardar seguimiento'}
-              </button>
+          {(adminEditable ||
+            (props.esAdmin &&
+              ['lista_ejecutivo', 'completa'].includes(props.estado))) && (
+            <div className="flex flex-wrap justify-end gap-2.5">
+              {props.esAdmin &&
+                ['lista_ejecutivo', 'completa'].includes(props.estado) && (
+                  <button
+                    onClick={reabrir}
+                    disabled={guardando}
+                    className="mr-auto rounded-lg border border-linea bg-white px-4 py-2 text-[13px] font-semibold transition hover:bg-superficie disabled:opacity-60"
+                  >
+                    Reabrir para el ejecutivo
+                  </button>
+                )}
+              {adminEditable && (
+                <>
+                  <button
+                    onClick={guardarSeguimiento}
+                    disabled={guardando}
+                    className="rounded-lg border border-linea bg-white px-4 py-2 text-[13px] font-semibold transition hover:bg-superficie disabled:opacity-60"
+                  >
+                    {guardando ? 'Guardando…' : 'Guardar seguimiento'}
+                  </button>
+                  <button
+                    onClick={cerrar}
+                    disabled={guardando}
+                    className="flex items-center gap-2 rounded-lg bg-petroleo px-4 py-2 text-[13px] font-semibold text-white transition hover:bg-petroleo-oscuro disabled:opacity-60"
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      className="h-[15px] w-[15px]"
+                    >
+                      <path d="M20 6 9 17l-5-5" />
+                    </svg>
+                    {guardando ? 'Procesando…' : 'Cerrar ficha y generar PDF'}
+                  </button>
+                </>
+              )}
             </div>
           )}
         </div>

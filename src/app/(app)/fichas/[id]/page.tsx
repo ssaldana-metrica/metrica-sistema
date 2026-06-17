@@ -22,7 +22,7 @@ export default async function PaginaFicha({
     .select(
       `id, codigo, estado, cliente_nombre, cliente_ruc, politica_pago,
        contacto_aprobacion, correo_contacto, inicio_acciones, fin_acciones,
-       facturar_antes_del_fin, moneda, observaciones_ejecutivo,
+       facturar_antes_del_fin, moneda, observaciones_ejecutivo, pdf_url,
        num_factura_cliente, oc_cliente, hes, fecha_emision_factura, total_seguimiento,
        cotizacion:cotizaciones!inner(
          id, codigo, proyecto, ejecutivo_id,
@@ -69,6 +69,7 @@ export default async function PaginaFicha({
       ejecutivo={uno(cot?.ejecutivo ?? null)?.nombre ?? '—'}
       puedeEditar={puedeEditar}
       esAdmin={esAdmin}
+      pdfHref={ficha.pdf_url ? `/fichas/${ficha.id as string}/pdf` : null}
       inicial={{
         clienteNombre: (ficha.cliente_nombre as string) ?? '',
         clienteRuc: (ficha.cliente_ruc as string) ?? '',
