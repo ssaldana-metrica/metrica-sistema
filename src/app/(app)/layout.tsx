@@ -42,6 +42,7 @@ export default async function LayoutProtegido({
         { href: '/panel', etiqueta: 'Panel', icono: 'panel' },
         { href: '/banco', etiqueta: 'Banco de códigos', icono: 'banco' },
         { href: '/cotizaciones', etiqueta: 'Cotizaciones', icono: 'cotizaciones' },
+        { href: '/fichas', etiqueta: 'Fichas de apertura', icono: 'fichas' },
       ],
     },
   ];
