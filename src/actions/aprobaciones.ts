@@ -10,6 +10,8 @@ import {
   escaparHtml,
   plantillaCorreo,
 } from '@/lib/correo';
+import { crearFichaSiFalta } from '@/lib/fichas';
+import { urlSistema } from '@/config/sistema';
 import { uno } from '@/lib/util';
 import { calcularTotales, formatearMonto, type Moneda } from '@/lib/calculos';
 
@@ -127,7 +129,23 @@ export async function aprobarCotizacion(id: string): Promise<ResultadoAprobar> {
     .eq('estado', 'pendiente'); // candado: solo si sigue pendiente
   if (errorEstado) return { error: 'No se pudo actualizar el estado.' };
 
-  // 4. Correo interno AL EJECUTIVO con el PDF adjunto
+  // 4. Crear automáticamente la ficha de apertura (1 a 1). Si fallara, NO
+  // tumba la aprobación (que ya quedó hecha): se sigue sin enlace en el correo.
+  let fichaId: string | null = null;
+  try {
+    const r = await crearFichaSiFalta(admin, {
+      cotizacionId: id,
+      codigo: cot.codigo as string,
+      clienteNombre: cliente.nombre_comercial,
+      clienteRuc: cliente.ruc,
+      moneda: cot.moneda as string,
+    });
+    fichaId = r.id;
+  } catch (e) {
+    console.error(`[ficha] no se pudo crear para ${cot.codigo}:`, e);
+  }
+
+  // 5. Correo interno AL EJECUTIVO con el PDF adjunto
   const totales = calcularTotales(
     lineas.map((l) => ({ cantidad: l.cantidad, precioUnitario: l.precio })),
     Number(cot.fee_porcentaje),
@@ -149,7 +167,12 @@ export async function aprobarCotizacion(id: string): Promise<ResultadoAprobar> {
          <li style="margin-bottom:4px;">Revisa el PDF adjunto — es el documento oficial aprobado.</li>
          <li style="margin-bottom:4px;">Envíaselo al cliente desde tu correo.</li>
          <li>Cuando el cliente confirme, llena la <b>ficha de apertura del proyecto</b> para activarlo.</li>
-       </ol>`,
+       </ol>
+       ${
+         fichaId
+           ? `<p style="margin:0 0 4px;"><a href="${urlSistema()}/fichas/${fichaId}" style="display:inline-block;background:#0E7C66;color:#fff;text-decoration:none;font-size:13px;font-weight:bold;padding:9px 16px;border-radius:8px;">Abrir la ficha de apertura →</a></p>`
+           : ''
+       }`,
     ),
     adjuntos: [{ nombre: `${cot.codigo}.pdf`, contenido: pdf }],
   });
