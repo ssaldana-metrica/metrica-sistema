@@ -4,6 +4,10 @@ const ESTILOS: Record<string, { clase: string; etiqueta: string }> = {
   aprobada: { clase: 'bg-verde-fondo text-verde', etiqueta: 'Aprobada' },
   observada: { clase: 'bg-azul-fondo text-azul', etiqueta: 'Observada' },
   anulada: { clase: 'bg-rojo-fondo text-rojo', etiqueta: 'Anulada' },
+  // Estados de la ficha de apertura (Fase 2).
+  en_proceso: { clase: 'bg-ambar-fondo text-ambar', etiqueta: 'En proceso' },
+  lista_ejecutivo: { clase: 'bg-azul-fondo text-azul', etiqueta: 'Lista del ejecutivo' },
+  completa: { clase: 'bg-verde-fondo text-verde', etiqueta: 'Completa' },
 };
 
 export function BadgeEstado({ estado }: { estado: string }) {

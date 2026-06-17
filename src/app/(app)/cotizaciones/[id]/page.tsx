@@ -129,6 +129,13 @@ export default async function DetalleCotizacion({
     })),
   };
 
+  // Si la cotización ya tiene ficha de apertura, enlazamos a ella.
+  const { data: ficha } = await supabase
+    .from('fichas_apertura')
+    .select('id')
+    .eq('cotizacion_id', id)
+    .maybeSingle();
+
   return (
     <div>
       {enviada && (
@@ -153,6 +160,7 @@ export default async function DetalleCotizacion({
       <VistaCotizacion
         cot={detalle}
         pdfHref={cot.pdf_url ? `/cotizaciones/${id}/pdf` : null}
+        fichaHref={ficha ? `/fichas/${ficha.id as string}` : null}
       />
     </div>
   );

@@ -40,9 +40,11 @@ const fechaCorta = (iso: string | null) => {
 export function VistaCotizacion({
   cot,
   pdfHref,
+  fichaHref,
 }: {
   cot: CotizacionDetalle;
   pdfHref?: string | null;
+  fichaHref?: string | null;
 }) {
   const totales = calcularTotales(
     cot.lineas.map((l) => ({ cantidad: l.cantidad, precioUnitario: l.precio })),
@@ -64,6 +66,24 @@ export function VistaCotizacion({
           </p>
         </div>
         <div className="flex items-center gap-3">
+          {fichaHref && (
+            <a
+              href={fichaHref}
+              className="flex items-center gap-2 rounded-lg bg-petroleo px-3.5 py-2 text-[12.5px] font-semibold text-white transition hover:bg-petroleo-oscuro"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                className="h-[15px] w-[15px]"
+              >
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                <path d="M14 2v6h6M9 13h6M9 17h6" />
+              </svg>
+              Ver ficha de apertura
+            </a>
+          )}
           {pdfHref && (
             <a
               href={pdfHref}
