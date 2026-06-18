@@ -1,10 +1,13 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { after } from 'next/server';
 import { obtenerSesion } from '@/lib/auth';
 import { crearClienteServidor } from '@/lib/supabase/server';
 import { crearClienteAdmin } from '@/lib/supabase/admin';
 import { generarPdfFicha } from '@/lib/pdf-ficha';
+import { enviarCorreoInterno, escaparHtml, plantillaCorreo } from '@/lib/correo';
+import { urlSistema } from '@/config/sistema';
 import type { Moneda } from '@/lib/calculos';
 
 export type FichaProveedorEntrada = {
@@ -31,16 +34,17 @@ export type DatosEjecutivo = {
   observacionesEjecutivo: string;
 };
 
-export type DatosSeguimientoCliente = {
-  numFacturaCliente: string;
-  ocCliente: string;
+// Cada factura del cliente (puede haber varias por ficha).
+export type FacturaClienteEntrada = {
+  numFactura: string;
+  oc: string;
   hes: string;
-  fechaEmisionFactura: string | null;
-  totalSeguimiento: number | null;
+  fechaEmision: string | null;
+  total: number | null;
 };
 
-export type SeguimientoProveedor = {
-  id: string; // ficha_proveedores.id
+// Cada factura de un proveedor (varias por proveedor), con moneda por línea.
+export type FacturaProveedorEntrada = {
   numOc: string;
   numFactura: string;
   fechaEmision: string | null;
@@ -48,7 +52,11 @@ export type SeguimientoProveedor = {
   monedaTotal: Moneda;
   importe: number | null;
   monedaImporte: Moneda;
-  pagoFraccionado: boolean;
+};
+
+export type SeguimientoProveedorEntrada = {
+  fichaProveedorId: string;
+  facturas: FacturaProveedorEntrada[];
 };
 
 type Resultado = { ok: true } | { error: string };
@@ -59,7 +67,13 @@ const fechaOnull = (v: string | null) => (v && v.trim() ? v.trim() : null);
 type Supa = Awaited<ReturnType<typeof crearClienteServidor>>;
 type Ctx =
   | { ok: false; error: string }
-  | { ok: true; supabase: Supa; estado: string; usuarioId: string };
+  | {
+      ok: true;
+      supabase: Supa;
+      estado: string;
+      usuarioId: string;
+      usuarioNombre: string;
+    };
 
 // Carga la ficha con lo necesario para autorizar y devuelve el contexto.
 async function contexto(fichaId: string): Promise<Ctx> {
@@ -87,6 +101,7 @@ async function contexto(fichaId: string): Promise<Ctx> {
     supabase,
     estado: ficha.estado as string,
     usuarioId: sesion.usuario.id,
+    usuarioNombre: sesion.usuario.nombre,
   };
 }
 
@@ -215,6 +230,41 @@ export async function marcarListaEjecutivo(
     .eq('estado', 'en_proceso');
   if (errEstado) return { error: 'No se pudo marcar como lista.' };
 
+  // Aviso a administración de que la ficha ya está lista para seguimiento.
+  const ejecutivo = ctx.usuarioNombre;
+  after(async () => {
+    try {
+      const admin = crearClienteAdmin();
+      const [{ data: f }, { data: admins }] = await Promise.all([
+        admin
+          .from('fichas_apertura')
+          .select('codigo, cliente_nombre')
+          .eq('id', fichaId)
+          .maybeSingle(),
+        admin
+          .from('usuarios')
+          .select('correo')
+          .in('rol', ['admin', 'gerencia'])
+          .eq('activo', true),
+      ]);
+      const correos = (admins ?? []).map((a) => a.correo as string);
+      if (correos.length === 0) return;
+      const r = await enviarCorreoInterno({
+        para: correos,
+        asunto: `📋 ${f?.codigo ?? 'Ficha'} lista para seguimiento · ${f?.cliente_nombre ?? ''}`,
+        html: plantillaCorreo(
+          'Ficha de apertura lista para seguimiento',
+          `<p style="font-size:13px;">${escaparHtml(ejecutivo)} completó su parte de la ficha <b>${escaparHtml((f?.codigo as string) ?? '')}</b> (${escaparHtml((f?.cliente_nombre as string) ?? '—')}).</p>
+           <p style="font-size:13px;">Ya puedes registrar el <b>seguimiento</b> y cerrarla.</p>
+           <p style="margin:14px 0 0;"><a href="${urlSistema()}/fichas/${fichaId}" style="display:inline-block;background:#0E7C66;color:#fff;text-decoration:none;font-size:13px;font-weight:bold;padding:9px 16px;border-radius:8px;">Abrir la ficha →</a></p>`,
+        ),
+      });
+      console.log(`[correo] ficha lista ${f?.codigo} a admin → ${r.detalle}`);
+    } catch (e) {
+      console.error('[correo] aviso de ficha lista falló:', e);
+    }
+  });
+
   revalidatePath(`/fichas/${fichaId}`);
   revalidatePath('/fichas');
   return { ok: true };
@@ -226,8 +276,8 @@ export async function marcarListaEjecutivo(
 // se cierra la ficha). Actualiza las filas en su sitio, sin recrearlas.
 export async function guardarSeguimientoAdmin(
   fichaId: string,
-  cliente: DatosSeguimientoCliente,
-  proveedores: SeguimientoProveedor[],
+  facturasCliente: FacturaClienteEntrada[],
+  proveedores: SeguimientoProveedorEntrada[],
 ): Promise<Resultado> {
   const sesion = await obtenerSesion();
   if (!sesion) return { error: 'Sesión expirada. Vuelve a entrar.' };
@@ -250,7 +300,7 @@ export async function guardarSeguimientoAdmin(
   const errSeg = await persistirSeguimiento(
     supabase,
     fichaId,
-    cliente,
+    facturasCliente,
     proveedores,
   );
   if (errSeg) return { error: errSeg };
@@ -260,41 +310,89 @@ export async function guardarSeguimientoAdmin(
   return { ok: true };
 }
 
-// Guarda el seguimiento (cliente + por proveedor) en su sitio, sin recrear.
+// Guarda el seguimiento reemplazando las facturas: las del cliente (por ficha)
+// y las de cada proveedor (por proveedor). Solo opera sobre proveedores que
+// realmente pertenecen a la ficha.
 async function persistirSeguimiento(
   supabase: Supa,
   fichaId: string,
-  cliente: DatosSeguimientoCliente,
-  proveedores: SeguimientoProveedor[],
+  facturasCliente: FacturaClienteEntrada[],
+  proveedores: SeguimientoProveedorEntrada[],
 ): Promise<string | null> {
-  const { error: errCliente } = await supabase
-    .from('fichas_apertura')
-    .update({
-      num_factura_cliente: cliente.numFacturaCliente.trim(),
-      oc_cliente: cliente.ocCliente.trim(),
-      hes: cliente.hes.trim(),
-      fecha_emision_factura: fechaOnull(cliente.fechaEmisionFactura),
-      total_seguimiento: cliente.totalSeguimiento,
-    })
-    .eq('id', fichaId);
-  if (errCliente) return 'No se pudo guardar el seguimiento del cliente.';
+  // Facturas del cliente (reemplazo completo).
+  const { error: errDelC } = await supabase
+    .from('ficha_facturas_cliente')
+    .delete()
+    .eq('ficha_id', fichaId);
+  if (errDelC) return 'No se pudo actualizar las facturas del cliente.';
+
+  const filasC = facturasCliente
+    .filter(
+      (f) =>
+        f.numFactura.trim() ||
+        f.oc.trim() ||
+        f.hes.trim() ||
+        f.fechaEmision ||
+        f.total != null,
+    )
+    .map((f, i) => ({
+      ficha_id: fichaId,
+      orden: i + 1,
+      num_factura: f.numFactura.trim(),
+      oc: f.oc.trim(),
+      hes: f.hes.trim(),
+      fecha_emision: fechaOnull(f.fechaEmision),
+      total: f.total,
+    }));
+  if (filasC.length > 0) {
+    const { error } = await supabase
+      .from('ficha_facturas_cliente')
+      .insert(filasC);
+    if (error) return 'No se pudieron guardar las facturas del cliente.';
+  }
+
+  // Proveedores válidos de esta ficha (evita tocar filas de otras fichas).
+  const { data: provRows } = await supabase
+    .from('ficha_proveedores')
+    .select('id')
+    .eq('ficha_id', fichaId);
+  const idsValidos = new Set((provRows ?? []).map((r) => r.id as string));
 
   for (const p of proveedores) {
-    const { error } = await supabase
-      .from('ficha_proveedores')
-      .update({
-        num_oc: p.numOc.trim(),
-        num_factura: p.numFactura.trim(),
-        fecha_emision: fechaOnull(p.fechaEmision),
-        total: p.total,
-        moneda_total: p.monedaTotal,
-        importe: p.importe,
-        moneda_importe: p.monedaImporte,
-        pago_fraccionado: p.pagoFraccionado,
-      })
-      .eq('id', p.id)
-      .eq('ficha_id', fichaId);
-    if (error) return 'No se pudo guardar el seguimiento de un proveedor.';
+    if (!idsValidos.has(p.fichaProveedorId)) continue;
+
+    const { error: errDelP } = await supabase
+      .from('ficha_proveedor_facturas')
+      .delete()
+      .eq('ficha_proveedor_id', p.fichaProveedorId);
+    if (errDelP) return 'No se pudo actualizar las facturas de un proveedor.';
+
+    const filasP = p.facturas
+      .filter(
+        (f) =>
+          f.numOc.trim() ||
+          f.numFactura.trim() ||
+          f.fechaEmision ||
+          f.total != null ||
+          f.importe != null,
+      )
+      .map((f, i) => ({
+        ficha_proveedor_id: p.fichaProveedorId,
+        orden: i + 1,
+        num_oc: f.numOc.trim(),
+        num_factura: f.numFactura.trim(),
+        fecha_emision: fechaOnull(f.fechaEmision),
+        total: f.total,
+        moneda_total: f.monedaTotal,
+        importe: f.importe,
+        moneda_importe: f.monedaImporte,
+      }));
+    if (filasP.length > 0) {
+      const { error } = await supabase
+        .from('ficha_proveedor_facturas')
+        .insert(filasP);
+      if (error) return 'No se pudieron guardar las facturas de un proveedor.';
+    }
   }
   return null;
 }
@@ -318,6 +416,35 @@ async function generarYGuardarPdf(
     .select('*')
     .eq('ficha_id', fichaId)
     .order('orden');
+  const provIds = (provs ?? []).map((p) => p.id as string);
+
+  const [{ data: facCliente }, { data: facProv }] = await Promise.all([
+    admin
+      .from('ficha_facturas_cliente')
+      .select('*')
+      .eq('ficha_id', fichaId)
+      .order('orden'),
+    provIds.length
+      ? admin
+          .from('ficha_proveedor_facturas')
+          .select('*')
+          .in('ficha_proveedor_id', provIds)
+          .order('orden')
+      : Promise.resolve({ data: [] as Record<string, unknown>[] }),
+  ]);
+
+  const facturasDe = (provId: string) =>
+    (facProv ?? [])
+      .filter((x) => (x.ficha_proveedor_id as string) === provId)
+      .map((x) => ({
+        numOc: (x.num_oc as string) ?? '',
+        numFactura: (x.num_factura as string) ?? '',
+        fechaEmision: (x.fecha_emision as string | null) ?? null,
+        total: x.total != null ? Number(x.total) : null,
+        monedaTotal: (x.moneda_total as Moneda) ?? 'PEN',
+        importe: x.importe != null ? Number(x.importe) : null,
+        monedaImporte: (x.moneda_importe as Moneda) ?? 'PEN',
+      }));
 
   let pdf: Buffer;
   try {
@@ -337,13 +464,13 @@ async function generarYGuardarPdf(
         moneda: f.moneda as Moneda,
         observaciones: (f.observaciones_ejecutivo as string) ?? '',
       },
-      seguimientoCliente: {
-        numFactura: (f.num_factura_cliente as string) ?? '',
-        oc: (f.oc_cliente as string) ?? '',
-        hes: (f.hes as string) ?? '',
-        fechaEmision: (f.fecha_emision_factura as string | null) ?? null,
-        total: f.total_seguimiento != null ? Number(f.total_seguimiento) : null,
-      },
+      facturasCliente: (facCliente ?? []).map((x) => ({
+        numFactura: (x.num_factura as string) ?? '',
+        oc: (x.oc as string) ?? '',
+        hes: (x.hes as string) ?? '',
+        fechaEmision: (x.fecha_emision as string | null) ?? null,
+        total: x.total != null ? Number(x.total) : null,
+      })),
       proveedores: (provs ?? []).map((p) => ({
         orden: p.orden as number,
         agencia: (p.agencia as string) ?? '',
@@ -353,13 +480,7 @@ async function generarYGuardarPdf(
         monto: Number(p.monto) || 0,
         banco: (p.banco as string) ?? '',
         cuentaCci: (p.cuenta_cci as string) ?? '',
-        numOc: (p.num_oc as string) ?? '',
-        numFactura: (p.num_factura as string) ?? '',
-        total: p.total != null ? Number(p.total) : null,
-        monedaTotal: (p.moneda_total as Moneda) ?? 'PEN',
-        importe: p.importe != null ? Number(p.importe) : null,
-        monedaImporte: (p.moneda_importe as Moneda) ?? 'PEN',
-        pagoFraccionado: Boolean(p.pago_fraccionado),
+        facturas: facturasDe(p.id as string),
       })),
     });
   } catch {
@@ -382,8 +503,8 @@ export type ResultadoCerrar =
 // seguimiento, valida lo mínimo, genera el PDF y pasa a 'completa'.
 export async function cerrarFicha(
   fichaId: string,
-  cliente: DatosSeguimientoCliente,
-  proveedores: SeguimientoProveedor[],
+  facturasCliente: FacturaClienteEntrada[],
+  proveedores: SeguimientoProveedorEntrada[],
 ): Promise<ResultadoCerrar> {
   const sesion = await obtenerSesion();
   if (!sesion) return { error: 'Sesión expirada. Vuelve a entrar.' };
@@ -403,15 +524,23 @@ export async function cerrarFicha(
         'Solo se puede cerrar una ficha que el ejecutivo marcó como lista.',
     };
 
-  const errSeg = await persistirSeguimiento(supabase, fichaId, cliente, proveedores);
+  const errSeg = await persistirSeguimiento(
+    supabase,
+    fichaId,
+    facturasCliente,
+    proveedores,
+  );
   if (errSeg) return { error: errSeg };
 
-  const faltan: string[] = [];
-  if (!cliente.numFacturaCliente.trim()) faltan.push('N° de factura al cliente');
-  if (!cliente.totalSeguimiento || cliente.totalSeguimiento <= 0)
-    faltan.push('total del seguimiento mayor a cero');
-  if (faltan.length > 0)
-    return { error: `Antes de cerrar, completa: ${faltan.join(', ')}.` };
+  // Mínimo para cerrar: al menos una factura del cliente con N° y total > 0.
+  const algunaValida = facturasCliente.some(
+    (f) => f.numFactura.trim() && (f.total ?? 0) > 0,
+  );
+  if (!algunaValida)
+    return {
+      error:
+        'Antes de cerrar, registra al menos una factura del cliente con N° y total mayor a cero.',
+    };
 
   // Genera y guarda el PDF (con el cliente admin, para Storage).
   const admin = crearClienteAdmin();
@@ -450,7 +579,12 @@ export async function reabrirFicha(fichaId: string): Promise<Resultado> {
   const supabase = await crearClienteServidor();
   const { data: ficha } = await supabase
     .from('fichas_apertura')
-    .select('estado')
+    .select(
+      `estado, codigo, cliente_nombre,
+       cotizacion:cotizaciones!inner(
+         ejecutivo:usuarios!cotizaciones_ejecutivo_id_fkey(nombre, correo)
+       )`,
+    )
     .eq('id', fichaId)
     .maybeSingle();
   if (!ficha) return { error: 'No se encontró la ficha.' };
@@ -467,6 +601,36 @@ export async function reabrirFicha(fichaId: string): Promise<Resultado> {
     })
     .eq('id', fichaId);
   if (error) return { error: 'No se pudo reabrir la ficha.' };
+
+  // Aviso al ejecutivo de que su ficha fue reabierta.
+  const cot = Array.isArray(ficha.cotizacion)
+    ? ficha.cotizacion[0]
+    : ficha.cotizacion;
+  const eje = cot
+    ? Array.isArray(cot.ejecutivo)
+      ? cot.ejecutivo[0]
+      : cot.ejecutivo
+    : null;
+  const quienReabre = sesion.usuario.nombre;
+  if (eje?.correo) {
+    after(async () => {
+      try {
+        const r = await enviarCorreoInterno({
+          para: eje.correo as string,
+          asunto: `↩ ${ficha.codigo} reabierta · ${ficha.cliente_nombre ?? ''}`,
+          html: plantillaCorreo(
+            'Tu ficha de apertura fue reabierta',
+            `<p style="font-size:13px;">Hola ${escaparHtml((eje.nombre as string)?.split(' ')[0] ?? '')},</p>
+             <p style="font-size:13px;">${escaparHtml(quienReabre)} reabrió la ficha <b>${escaparHtml(ficha.codigo as string)}</b> (${escaparHtml((ficha.cliente_nombre as string) ?? '—')}). Actualiza lo necesario y vuelve a marcar tu parte como lista.</p>
+             <p style="margin:14px 0 0;"><a href="${urlSistema()}/fichas/${fichaId}" style="display:inline-block;background:#0E7C66;color:#fff;text-decoration:none;font-size:13px;font-weight:bold;padding:9px 16px;border-radius:8px;">Abrir la ficha →</a></p>`,
+          ),
+        });
+        console.log(`[correo] ficha reabierta ${ficha.codigo} a ejecutivo → ${r.detalle}`);
+      } catch (e) {
+        console.error('[correo] aviso de reapertura falló:', e);
+      }
+    });
+  }
 
   revalidatePath(`/fichas/${fichaId}`);
   revalidatePath('/fichas');

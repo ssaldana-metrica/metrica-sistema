@@ -9,6 +9,24 @@ import {
 import { EMPRESA } from '@/config/empresa';
 import { formatearMonto, type Moneda } from '@/lib/calculos';
 
+export type FacturaClientePdf = {
+  numFactura: string;
+  oc: string;
+  hes: string;
+  fechaEmision: string | null;
+  total: number | null;
+};
+
+export type FacturaProveedorPdf = {
+  numOc: string;
+  numFactura: string;
+  fechaEmision: string | null;
+  total: number | null;
+  monedaTotal: Moneda;
+  importe: number | null;
+  monedaImporte: Moneda;
+};
+
 export type DatosPdfFicha = {
   codigo: string;
   cliente: {
@@ -25,13 +43,7 @@ export type DatosPdfFicha = {
     moneda: Moneda;
     observaciones: string;
   };
-  seguimientoCliente: {
-    numFactura: string;
-    oc: string;
-    hes: string;
-    fechaEmision: string | null;
-    total: number | null;
-  };
+  facturasCliente: FacturaClientePdf[];
   proveedores: {
     orden: number;
     agencia: string;
@@ -41,13 +53,7 @@ export type DatosPdfFicha = {
     monto: number;
     banco: string;
     cuentaCci: string;
-    numOc: string;
-    numFactura: string;
-    total: number | null;
-    monedaTotal: Moneda;
-    importe: number | null;
-    monedaImporte: Moneda;
-    pagoFraccionado: boolean;
+    facturas: FacturaProveedorPdf[];
   }[];
 };
 
@@ -98,12 +104,24 @@ const s = StyleSheet.create({
     paddingHorizontal: 5,
   },
   celda: { paddingVertical: 5, paddingHorizontal: 5, fontSize: 7.8 },
-  cProv: { width: '20%' },
-  cDesc: { width: '20%' },
-  cBanco: { width: '20%' },
-  cMonto: { width: '13%', textAlign: 'right' },
-  cFact: { width: '14%' },
-  cImporte: { width: '13%', textAlign: 'right' },
+  // Tabla de facturas del cliente
+  fcFact: { width: '24%' },
+  fcOc: { width: '20%' },
+  fcHes: { width: '18%' },
+  fcFecha: { width: '20%' },
+  fcTotal: { width: '18%', textAlign: 'right' },
+  // Proveedor
+  provBloque: { borderWidth: 1, borderColor: LINEA, borderRadius: 4, marginBottom: 8, padding: 8 },
+  provNombre: { fontSize: 9.5, fontFamily: 'Helvetica-Bold' },
+  provMeta: { fontSize: 7.6, color: GRIS, marginTop: 2 },
+  provMonto: { fontSize: 9, fontFamily: 'Helvetica-Bold', textAlign: 'right' },
+  // Sub-tabla de facturas del proveedor
+  pfOc: { width: '20%' },
+  pfFact: { width: '22%' },
+  pfFecha: { width: '20%' },
+  pfTotal: { width: '19%', textAlign: 'right' },
+  pfImporte: { width: '19%', textAlign: 'right' },
+  vacio: { fontSize: 7.8, color: GRIS, fontStyle: 'italic', marginTop: 4 },
   pie: {
     position: 'absolute',
     bottom: 24,
@@ -121,7 +139,7 @@ const fechaLarga = (iso: string | null) =>
   iso
     ? new Date(`${iso}T12:00:00`).toLocaleDateString('es-PE', {
         day: '2-digit',
-        month: 'long',
+        month: 'short',
         year: 'numeric',
       })
     : '—';
@@ -177,57 +195,92 @@ function Documento({ d }: { d: DatosPdfFicha }) {
           ) : null}
         </View>
 
-        <Text style={s.seccion}>Seguimiento del cliente</Text>
-        <View style={s.rejilla}>
-          <Dato k="N° factura al cliente" v={d.seguimientoCliente.numFactura || '—'} />
-          <Dato k="OC del cliente" v={d.seguimientoCliente.oc || '—'} />
-          <Dato k="HES" v={d.seguimientoCliente.hes || '—'} />
-          <Dato k="Fecha de emisión" v={fechaLarga(d.seguimientoCliente.fechaEmision)} />
-          <Dato
-            k="Total"
-            v={montoOpt(d.seguimientoCliente.total, d.servicio.moneda)}
-          />
-        </View>
-
-        <Text style={s.seccion}>Proveedores que cobran</Text>
-        <View style={s.tabla}>
-          <View style={s.filaCab}>
-            <Text style={[s.cab, s.cProv]}>Proveedor</Text>
-            <Text style={[s.cab, s.cDesc]}>Descripción</Text>
-            <Text style={[s.cab, s.cBanco]}>Banco / CCI</Text>
-            <Text style={[s.cab, s.cMonto]}>Monto</Text>
-            <Text style={[s.cab, s.cFact]}>N° factura</Text>
-            <Text style={[s.cab, s.cImporte]}>Importe</Text>
-          </View>
-          {d.proveedores.map((p, i) => {
-            const nombre = [p.agencia, p.influencer].filter(Boolean).join(' · ') || '—';
-            const banco = [p.banco, p.cuentaCci].filter(Boolean).join(' · ') || '—';
-            return (
+        <Text style={s.seccion}>Facturas al cliente</Text>
+        {d.facturasCliente.length === 0 ? (
+          <Text style={s.vacio}>Sin facturas registradas.</Text>
+        ) : (
+          <View style={s.tabla}>
+            <View style={s.filaCab}>
+              <Text style={[s.cab, s.fcFact]}>N° factura</Text>
+              <Text style={[s.cab, s.fcOc]}>OC</Text>
+              <Text style={[s.cab, s.fcHes]}>HES</Text>
+              <Text style={[s.cab, s.fcFecha]}>Emisión</Text>
+              <Text style={[s.cab, s.fcTotal]}>Total</Text>
+            </View>
+            {d.facturasCliente.map((fc, i) => (
               <View
-                key={p.orden}
-                style={i === d.proveedores.length - 1 ? s.filaUltima : s.fila}
+                key={i}
+                style={i === d.facturasCliente.length - 1 ? s.filaUltima : s.fila}
                 wrap={false}
               >
-                <Text style={[s.celda, s.cProv]}>
-                  {nombre}
-                  {p.ruc ? `\nRUC ${p.ruc}` : ''}
-                </Text>
-                <Text style={[s.celda, s.cDesc]}>{p.descripcion || '—'}</Text>
-                <Text style={[s.celda, s.cBanco]}>{banco}</Text>
-                <Text style={[s.celda, s.cMonto]}>
-                  {formatearMonto(p.monto, d.servicio.moneda)}
-                </Text>
-                <Text style={[s.celda, s.cFact]}>
-                  {p.numFactura || '—'}
-                  {p.pagoFraccionado ? '\n(fraccionado)' : ''}
-                </Text>
-                <Text style={[s.celda, s.cImporte]}>
-                  {montoOpt(p.importe, p.monedaImporte)}
+                <Text style={[s.celda, s.fcFact]}>{fc.numFactura || '—'}</Text>
+                <Text style={[s.celda, s.fcOc]}>{fc.oc || '—'}</Text>
+                <Text style={[s.celda, s.fcHes]}>{fc.hes || '—'}</Text>
+                <Text style={[s.celda, s.fcFecha]}>{fechaLarga(fc.fechaEmision)}</Text>
+                <Text style={[s.celda, s.fcTotal]}>
+                  {montoOpt(fc.total, d.servicio.moneda)}
                 </Text>
               </View>
-            );
-          })}
-        </View>
+            ))}
+          </View>
+        )}
+
+        <Text style={s.seccion}>Proveedores que cobran</Text>
+        {d.proveedores.map((p) => {
+          const nombre = [p.agencia, p.influencer].filter(Boolean).join(' · ') || '—';
+          const banco = [p.banco, p.cuentaCci].filter(Boolean).join(' · ') || '—';
+          return (
+            <View key={p.orden} style={s.provBloque} wrap={false}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                <View style={{ flex: 1, paddingRight: 8 }}>
+                  <Text style={s.provNombre}>{nombre}</Text>
+                  <Text style={s.provMeta}>
+                    {p.ruc ? `RUC ${p.ruc} · ` : ''}
+                    {p.descripcion || 'Sin descripción'}
+                  </Text>
+                  <Text style={s.provMeta}>{banco}</Text>
+                </View>
+                <View>
+                  <Text style={s.datoK}>Monto</Text>
+                  <Text style={s.provMonto}>
+                    {formatearMonto(p.monto, d.servicio.moneda)}
+                  </Text>
+                </View>
+              </View>
+
+              {p.facturas.length === 0 ? (
+                <Text style={s.vacio}>Sin facturas de seguimiento.</Text>
+              ) : (
+                <View style={[s.tabla, { marginTop: 6 }]}>
+                  <View style={s.filaCab}>
+                    <Text style={[s.cab, s.pfOc]}>N° OC</Text>
+                    <Text style={[s.cab, s.pfFact]}>N° factura</Text>
+                    <Text style={[s.cab, s.pfFecha]}>Emisión</Text>
+                    <Text style={[s.cab, s.pfTotal]}>Total</Text>
+                    <Text style={[s.cab, s.pfImporte]}>Importe</Text>
+                  </View>
+                  {p.facturas.map((fp, j) => (
+                    <View
+                      key={j}
+                      style={j === p.facturas.length - 1 ? s.filaUltima : s.fila}
+                      wrap={false}
+                    >
+                      <Text style={[s.celda, s.pfOc]}>{fp.numOc || '—'}</Text>
+                      <Text style={[s.celda, s.pfFact]}>{fp.numFactura || '—'}</Text>
+                      <Text style={[s.celda, s.pfFecha]}>{fechaLarga(fp.fechaEmision)}</Text>
+                      <Text style={[s.celda, s.pfTotal]}>
+                        {montoOpt(fp.total, fp.monedaTotal)}
+                      </Text>
+                      <Text style={[s.celda, s.pfImporte]}>
+                        {montoOpt(fp.importe, fp.monedaImporte)}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </View>
+          );
+        })}
 
         <Text style={s.pie} fixed>
           Ficha de apertura generada por el Sistema Operativo de {EMPRESA.nombre} ·

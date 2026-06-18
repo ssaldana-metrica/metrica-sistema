@@ -15,28 +15,9 @@ import {
 import { BadgeEstado } from '@/components/ui/BadgeEstado';
 import { formatearMonto, redondear, type Moneda } from '@/lib/calculos';
 
-// Filas del seguimiento del admin (números como texto en el formulario).
-type SeguimientoClienteFila = {
-  numFacturaCliente: string;
-  ocCliente: string;
-  hes: string;
-  fechaEmisionFactura: string | null;
-  totalSeguimiento: string;
-};
-type SeguimientoProvFila = {
-  id: string;
-  etiqueta: string;
-  numOc: string;
-  numFactura: string;
-  fechaEmision: string | null;
-  total: string;
-  monedaTotal: Moneda;
-  importe: string;
-  monedaImporte: Moneda;
-  pagoFraccionado: boolean;
-};
 const numOnull = (v: string) => (v.trim() ? parseFloat(v) || 0 : null);
 
+// ── Proveedores (parte del ejecutivo) ───────────────────────────────────────
 type ProveedorFila = {
   agencia: string;
   influencerProveedor: string;
@@ -47,7 +28,6 @@ type ProveedorFila = {
   cuentaCci: string;
   emailProveedor: string;
 };
-
 const filaVacia = (): ProveedorFila => ({
   agencia: '',
   influencerProveedor: '',
@@ -58,6 +38,47 @@ const filaVacia = (): ProveedorFila => ({
   cuentaCci: '',
   emailProveedor: '',
 });
+
+// ── Seguimiento (parte del admin): facturas repetibles ──────────────────────
+type FacturaClienteFila = {
+  numFactura: string;
+  oc: string;
+  hes: string;
+  fechaEmision: string | null;
+  total: string;
+};
+const facturaClienteVacia = (): FacturaClienteFila => ({
+  numFactura: '',
+  oc: '',
+  hes: '',
+  fechaEmision: null,
+  total: '',
+});
+
+type FacturaProvFila = {
+  numOc: string;
+  numFactura: string;
+  fechaEmision: string | null;
+  total: string;
+  monedaTotal: Moneda;
+  importe: string;
+  monedaImporte: Moneda;
+};
+const facturaProvVacia = (m: Moneda): FacturaProvFila => ({
+  numOc: '',
+  numFactura: '',
+  fechaEmision: null,
+  total: '',
+  monedaTotal: m,
+  importe: '',
+  monedaImporte: m,
+});
+
+type SeguimientoProvGrupo = {
+  id: string;
+  etiqueta: string;
+  facturas: FacturaProvFila[];
+};
 
 export type FichaEditorProps = {
   fichaId: string;
@@ -72,8 +93,8 @@ export type FichaEditorProps = {
   pdfHref: string | null;
   inicial: DatosEjecutivo;
   proveedoresIniciales: ProveedorFila[];
-  seguimientoCliente: SeguimientoClienteFila;
-  seguimientoProveedores: SeguimientoProvFila[];
+  facturasClienteIniciales: FacturaClienteFila[];
+  seguimientoProveedores: SeguimientoProvGrupo[];
 };
 
 export function FichaEditor(props: FichaEditorProps) {
@@ -89,29 +110,34 @@ export function FichaEditor(props: FichaEditorProps) {
       ? props.proveedoresIniciales
       : [filaVacia()],
   );
-  const [segCliente, setSegCliente] = useState<SeguimientoClienteFila>(
-    props.seguimientoCliente,
+  const [facCliente, setFacCliente] = useState<FacturaClienteFila[]>(
+    props.facturasClienteIniciales.length
+      ? props.facturasClienteIniciales
+      : [facturaClienteVacia()],
   );
-  const [segProvs, setSegProvs] = useState<SeguimientoProvFila[]>(
-    props.seguimientoProveedores,
+  // Cada proveedor arranca con al menos una fila de factura visible.
+  const [segProvs, setSegProvs] = useState<SeguimientoProvGrupo[]>(
+    props.seguimientoProveedores.map((g) => ({
+      ...g,
+      facturas: g.facturas.length
+        ? g.facturas
+        : [facturaProvVacia(props.inicial.moneda)],
+    })),
   );
 
   const editable = props.puedeEditar;
-  // El seguimiento se edita cuando el ejecutivo ya marcó su parte lista.
   const adminEditable = props.esAdmin && props.estado === 'lista_ejecutivo';
 
+  // ── Parte del ejecutivo ──
   const fijar = <K extends keyof DatosEjecutivo>(k: K, v: DatosEjecutivo[K]) =>
     setDatos((d) => ({ ...d, [k]: v }));
   const fijarProv = (i: number, k: keyof ProveedorFila, v: string) =>
     setProvs((ps) => ps.map((p, j) => (j === i ? { ...p, [k]: v } : p)));
-  const agregar = () => setProvs((ps) => [...ps, filaVacia()]);
-  const quitar = (i: number) =>
+  const agregarProv = () => setProvs((ps) => [...ps, filaVacia()]);
+  const quitarProv = (i: number) =>
     setProvs((ps) => (ps.length === 1 ? ps : ps.filter((_, j) => j !== i)));
 
-  const sumaMontos = provs.reduce(
-    (s, p) => s + (parseFloat(p.monto) || 0),
-    0,
-  );
+  const sumaMontos = provs.reduce((s, p) => s + (parseFloat(p.monto) || 0), 0);
 
   const aEntrada = (): FichaProveedorEntrada[] =>
     provs
@@ -161,32 +187,70 @@ export function FichaEditor(props: FichaEditorProps) {
     });
   }
 
-  const fijarSegCliente = (k: keyof SeguimientoClienteFila, v: string) =>
-    setSegCliente((s) => ({ ...s, [k]: v }));
-  const fijarSegProv = (
-    i: number,
-    k: keyof SeguimientoProvFila,
-    v: string | boolean,
-  ) => setSegProvs((ps) => ps.map((p, j) => (j === i ? { ...p, [k]: v } : p)));
+  // ── Parte del admin: facturas del cliente ──
+  const fijarFacCliente = (i: number, k: keyof FacturaClienteFila, v: string) =>
+    setFacCliente((fs) => fs.map((f, j) => (j === i ? { ...f, [k]: v } : f)));
+  const agregarFacCliente = () =>
+    setFacCliente((fs) => [...fs, facturaClienteVacia()]);
+  const quitarFacCliente = (i: number) =>
+    setFacCliente((fs) => fs.filter((_, j) => j !== i));
 
-  const segClientePayload = () => ({
-    numFacturaCliente: segCliente.numFacturaCliente,
-    ocCliente: segCliente.ocCliente,
-    hes: segCliente.hes,
-    fechaEmisionFactura: segCliente.fechaEmisionFactura,
-    totalSeguimiento: numOnull(segCliente.totalSeguimiento),
-  });
+  // ── Parte del admin: facturas por proveedor ──
+  const fijarFacProv = (
+    gi: number,
+    fi: number,
+    k: keyof FacturaProvFila,
+    v: string,
+  ) =>
+    setSegProvs((gs) =>
+      gs.map((g, j) =>
+        j === gi
+          ? {
+              ...g,
+              facturas: g.facturas.map((f, m) =>
+                m === fi ? { ...f, [k]: v } : f,
+              ),
+            }
+          : g,
+      ),
+    );
+  const agregarFacProv = (gi: number) =>
+    setSegProvs((gs) =>
+      gs.map((g, j) =>
+        j === gi
+          ? { ...g, facturas: [...g.facturas, facturaProvVacia(datos.moneda)] }
+          : g,
+      ),
+    );
+  const quitarFacProv = (gi: number, fi: number) =>
+    setSegProvs((gs) =>
+      gs.map((g, j) =>
+        j === gi
+          ? { ...g, facturas: g.facturas.filter((_, m) => m !== fi) }
+          : g,
+      ),
+    );
+
+  const facturasClientePayload = () =>
+    facCliente.map((f) => ({
+      numFactura: f.numFactura,
+      oc: f.oc,
+      hes: f.hes,
+      fechaEmision: f.fechaEmision,
+      total: numOnull(f.total),
+    }));
   const segProvsPayload = () =>
-    segProvs.map((p) => ({
-      id: p.id,
-      numOc: p.numOc,
-      numFactura: p.numFactura,
-      fechaEmision: p.fechaEmision,
-      total: numOnull(p.total),
-      monedaTotal: p.monedaTotal,
-      importe: numOnull(p.importe),
-      monedaImporte: p.monedaImporte,
-      pagoFraccionado: p.pagoFraccionado,
+    segProvs.map((g) => ({
+      fichaProveedorId: g.id,
+      facturas: g.facturas.map((f) => ({
+        numOc: f.numOc,
+        numFactura: f.numFactura,
+        fechaEmision: f.fechaEmision,
+        total: numOnull(f.total),
+        monedaTotal: f.monedaTotal,
+        importe: numOnull(f.importe),
+        monedaImporte: f.monedaImporte,
+      })),
     }));
 
   function guardarSeguimiento() {
@@ -195,7 +259,7 @@ export function FichaEditor(props: FichaEditorProps) {
     startTransition(async () => {
       const r = await guardarSeguimientoAdmin(
         props.fichaId,
-        segClientePayload(),
+        facturasClientePayload(),
         segProvsPayload(),
       );
       if ('error' in r) setError(r.error);
@@ -212,7 +276,7 @@ export function FichaEditor(props: FichaEditorProps) {
     startTransition(async () => {
       const r = await cerrarFicha(
         props.fichaId,
-        segClientePayload(),
+        facturasClientePayload(),
         segProvsPayload(),
       );
       if ('error' in r) setError(r.error);
@@ -287,7 +351,6 @@ export function FichaEditor(props: FichaEditorProps) {
         </div>
       )}
 
-      {/* Pestañas */}
       <div className="mb-5 flex gap-1 border-b border-linea">
         <Tab
           activa={pestana === 'ejecutivo'}
@@ -315,7 +378,6 @@ export function FichaEditor(props: FichaEditorProps) {
 
       {pestana === 'ejecutivo' ? (
         <div className="space-y-5">
-          {/* Datos del cliente */}
           <Tarjeta titulo="Datos del cliente">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <Campo label="Cliente">
@@ -367,7 +429,6 @@ export function FichaEditor(props: FichaEditorProps) {
             </div>
           </Tarjeta>
 
-          {/* Datos del servicio */}
           <Tarjeta titulo="Datos del servicio">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <Campo label="Inicio de acciones">
@@ -419,15 +480,12 @@ export function FichaEditor(props: FichaEditorProps) {
                 value={datos.observacionesEjecutivo}
                 disabled={!editable}
                 rows={3}
-                onChange={(e) =>
-                  fijar('observacionesEjecutivo', e.target.value)
-                }
+                onChange={(e) => fijar('observacionesEjecutivo', e.target.value)}
                 className={inputCls}
               />
             </Campo>
           </Tarjeta>
 
-          {/* Proveedores (se llena de cero) */}
           <Tarjeta titulo="Proveedores que cobran">
             <p className="-mt-1 mb-3 text-[12px] text-tinta-tenue">
               Quien factura no siempre es quien se cotizó. Llena aquí a quienes
@@ -533,7 +591,7 @@ export function FichaEditor(props: FichaEditorProps) {
                       </td>
                       <td className="px-1 py-1 text-center">
                         <button
-                          onClick={() => quitar(i)}
+                          onClick={() => quitarProv(i)}
                           disabled={!editable || provs.length === 1}
                           title="Quitar fila"
                           className="flex h-7 w-7 items-center justify-center rounded-md text-rojo transition hover:bg-rojo-fondo disabled:opacity-30"
@@ -548,7 +606,7 @@ export function FichaEditor(props: FichaEditorProps) {
             </div>
             <div className="mt-3 flex items-center justify-between">
               <button
-                onClick={agregar}
+                onClick={agregarProv}
                 disabled={!editable}
                 className="rounded-lg border border-linea bg-white px-3 py-1.5 text-[12.5px] font-semibold transition hover:bg-superficie disabled:opacity-50"
               >
@@ -597,63 +655,102 @@ export function FichaEditor(props: FichaEditorProps) {
             </div>
           )}
 
-          {/* Seguimiento a nivel cliente */}
+          {/* Facturas del cliente (repetibles) */}
           <Tarjeta titulo="Seguimiento del cliente">
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <Campo label="N° factura al cliente">
-                <input
-                  value={segCliente.numFacturaCliente}
-                  disabled={!adminEditable}
-                  onChange={(e) =>
-                    fijarSegCliente('numFacturaCliente', e.target.value)
-                  }
-                  className={inputCls}
-                />
-              </Campo>
-              <Campo label="OC del cliente">
-                <input
-                  value={segCliente.ocCliente}
-                  disabled={!adminEditable}
-                  onChange={(e) => fijarSegCliente('ocCliente', e.target.value)}
-                  className={inputCls}
-                />
-              </Campo>
-              <Campo label="HES">
-                <input
-                  value={segCliente.hes}
-                  disabled={!adminEditable}
-                  onChange={(e) => fijarSegCliente('hes', e.target.value)}
-                  className={inputCls}
-                />
-              </Campo>
-              <Campo label="Fecha de emisión de factura">
-                <input
-                  type="date"
-                  value={segCliente.fechaEmisionFactura ?? ''}
-                  disabled={!adminEditable}
-                  onChange={(e) =>
-                    fijarSegCliente('fechaEmisionFactura', e.target.value)
-                  }
-                  className={inputCls}
-                />
-              </Campo>
-              <Campo label={`Total (${monedaTexto(datos.moneda)})`}>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={segCliente.totalSeguimiento}
-                  disabled={!adminEditable}
-                  onChange={(e) =>
-                    fijarSegCliente('totalSeguimiento', e.target.value)
-                  }
-                  className={`${inputCls} text-right font-mono`}
-                />
-              </Campo>
+            <p className="-mt-1 mb-3 text-[12px] text-tinta-tenue">
+              Agrega una entrada por cada factura emitida al cliente. Totales en{' '}
+              {monedaTexto(datos.moneda)}.
+            </p>
+            <div className="space-y-3">
+              {facCliente.map((f, i) => (
+                <div
+                  key={i}
+                  className="rounded-lg border border-linea-suave p-4"
+                >
+                  <div className="mb-2 flex items-center justify-between">
+                    <span className="text-[12px] font-semibold text-tinta-tenue">
+                      Factura {i + 1}
+                    </span>
+                    {adminEditable && facCliente.length > 1 && (
+                      <button
+                        onClick={() => quitarFacCliente(i)}
+                        title="Quitar factura"
+                        className="flex h-7 w-7 items-center justify-center rounded-md text-rojo transition hover:bg-rojo-fondo"
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                    <Campo label="N° factura al cliente">
+                      <input
+                        value={f.numFactura}
+                        disabled={!adminEditable}
+                        onChange={(e) =>
+                          fijarFacCliente(i, 'numFactura', e.target.value)
+                        }
+                        className={inputCls}
+                      />
+                    </Campo>
+                    <Campo label="OC del cliente">
+                      <input
+                        value={f.oc}
+                        disabled={!adminEditable}
+                        onChange={(e) =>
+                          fijarFacCliente(i, 'oc', e.target.value)
+                        }
+                        className={inputCls}
+                      />
+                    </Campo>
+                    <Campo label="HES">
+                      <input
+                        value={f.hes}
+                        disabled={!adminEditable}
+                        onChange={(e) =>
+                          fijarFacCliente(i, 'hes', e.target.value)
+                        }
+                        className={inputCls}
+                      />
+                    </Campo>
+                    <Campo label="Fecha de emisión">
+                      <input
+                        type="date"
+                        value={f.fechaEmision ?? ''}
+                        disabled={!adminEditable}
+                        onChange={(e) =>
+                          fijarFacCliente(i, 'fechaEmision', e.target.value)
+                        }
+                        className={inputCls}
+                      />
+                    </Campo>
+                    <Campo label={`Total (${monedaTexto(datos.moneda)})`}>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={f.total}
+                        disabled={!adminEditable}
+                        onChange={(e) =>
+                          fijarFacCliente(i, 'total', e.target.value)
+                        }
+                        className={`${inputCls} text-right font-mono`}
+                      />
+                    </Campo>
+                  </div>
+                </div>
+              ))}
             </div>
+            {adminEditable && (
+              <button
+                onClick={agregarFacCliente}
+                className="mt-3 rounded-lg border border-linea bg-white px-3 py-1.5 text-[12.5px] font-semibold transition hover:bg-superficie"
+              >
+                + Agregar factura del cliente
+              </button>
+            )}
           </Tarjeta>
 
-          {/* Seguimiento por proveedor (moneda por línea) */}
+          {/* Facturas por proveedor (repetibles, moneda por línea) */}
           <Tarjeta titulo="Seguimiento por proveedor">
             {segProvs.length === 0 ? (
               <p className="text-[13px] text-tinta-suave">
@@ -661,128 +758,159 @@ export function FichaEditor(props: FichaEditorProps) {
               </p>
             ) : (
               <div className="space-y-4">
-                {segProvs.map((p, i) => (
+                {segProvs.map((g, gi) => (
                   <div
-                    key={p.id}
+                    key={g.id}
                     className="rounded-lg border border-linea-suave p-4"
                   >
-                    <div className="mb-3 flex items-center justify-between">
-                      <span className="text-[13px] font-semibold">
-                        {p.etiqueta}
-                      </span>
-                      <label className="flex items-center gap-2 text-[12.5px]">
-                        <input
-                          type="checkbox"
-                          checked={p.pagoFraccionado}
-                          disabled={!adminEditable}
-                          onChange={(e) =>
-                            fijarSegProv(i, 'pagoFraccionado', e.target.checked)
-                          }
-                          className="h-4 w-4 rounded border-linea"
-                        />
-                        Pago fraccionado
-                      </label>
+                    <div className="mb-3 text-[13px] font-semibold">
+                      {g.etiqueta}
                     </div>
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                      <Campo label="N° OC">
-                        <input
-                          value={p.numOc}
-                          disabled={!adminEditable}
-                          onChange={(e) =>
-                            fijarSegProv(i, 'numOc', e.target.value)
-                          }
-                          className={inputCls}
-                        />
-                      </Campo>
-                      <Campo label="N° factura">
-                        <input
-                          value={p.numFactura}
-                          disabled={!adminEditable}
-                          onChange={(e) =>
-                            fijarSegProv(i, 'numFactura', e.target.value)
-                          }
-                          className={inputCls}
-                        />
-                      </Campo>
-                      <Campo label="Fecha de emisión">
-                        <input
-                          type="date"
-                          value={p.fechaEmision ?? ''}
-                          disabled={!adminEditable}
-                          onChange={(e) =>
-                            fijarSegProv(i, 'fechaEmision', e.target.value)
-                          }
-                          className={inputCls}
-                        />
-                      </Campo>
-                      <Campo label="Total">
-                        <MontoMoneda
-                          valor={p.total}
-                          moneda={p.monedaTotal}
-                          disabled={!adminEditable}
-                          onValor={(v) => fijarSegProv(i, 'total', v)}
-                          onMoneda={(m) => fijarSegProv(i, 'monedaTotal', m)}
-                        />
-                      </Campo>
-                      <Campo label="Importe del proveedor">
-                        <MontoMoneda
-                          valor={p.importe}
-                          moneda={p.monedaImporte}
-                          disabled={!adminEditable}
-                          onValor={(v) => fijarSegProv(i, 'importe', v)}
-                          onMoneda={(m) => fijarSegProv(i, 'monedaImporte', m)}
-                        />
-                      </Campo>
+                    <div className="space-y-3">
+                      {g.facturas.map((f, fi) => (
+                        <div
+                          key={fi}
+                          className="rounded-md border border-linea-suave bg-superficie/40 p-3"
+                        >
+                          <div className="mb-2 flex items-center justify-between">
+                            <span className="text-[11.5px] font-semibold text-tinta-tenue">
+                              Factura {fi + 1}
+                            </span>
+                            {adminEditable && g.facturas.length > 1 && (
+                              <button
+                                onClick={() => quitarFacProv(gi, fi)}
+                                title="Quitar factura"
+                                className="flex h-6 w-6 items-center justify-center rounded-md text-rojo transition hover:bg-rojo-fondo"
+                              >
+                                ×
+                              </button>
+                            )}
+                          </div>
+                          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                            <Campo label="N° OC">
+                              <input
+                                value={f.numOc}
+                                disabled={!adminEditable}
+                                onChange={(e) =>
+                                  fijarFacProv(gi, fi, 'numOc', e.target.value)
+                                }
+                                className={inputCls}
+                              />
+                            </Campo>
+                            <Campo label="N° factura">
+                              <input
+                                value={f.numFactura}
+                                disabled={!adminEditable}
+                                onChange={(e) =>
+                                  fijarFacProv(
+                                    gi,
+                                    fi,
+                                    'numFactura',
+                                    e.target.value,
+                                  )
+                                }
+                                className={inputCls}
+                              />
+                            </Campo>
+                            <Campo label="Fecha de emisión">
+                              <input
+                                type="date"
+                                value={f.fechaEmision ?? ''}
+                                disabled={!adminEditable}
+                                onChange={(e) =>
+                                  fijarFacProv(
+                                    gi,
+                                    fi,
+                                    'fechaEmision',
+                                    e.target.value,
+                                  )
+                                }
+                                className={inputCls}
+                              />
+                            </Campo>
+                            <Campo label="Total">
+                              <MontoMoneda
+                                valor={f.total}
+                                moneda={f.monedaTotal}
+                                disabled={!adminEditable}
+                                onValor={(v) =>
+                                  fijarFacProv(gi, fi, 'total', v)
+                                }
+                                onMoneda={(m) =>
+                                  fijarFacProv(gi, fi, 'monedaTotal', m)
+                                }
+                              />
+                            </Campo>
+                            <Campo label="Importe del proveedor">
+                              <MontoMoneda
+                                valor={f.importe}
+                                moneda={f.monedaImporte}
+                                disabled={!adminEditable}
+                                onValor={(v) =>
+                                  fijarFacProv(gi, fi, 'importe', v)
+                                }
+                                onMoneda={(m) =>
+                                  fijarFacProv(gi, fi, 'monedaImporte', m)
+                                }
+                              />
+                            </Campo>
+                          </div>
+                        </div>
+                      ))}
                     </div>
+                    {adminEditable && (
+                      <button
+                        onClick={() => agregarFacProv(gi)}
+                        className="mt-3 rounded-lg border border-linea bg-white px-3 py-1.5 text-[12px] font-semibold transition hover:bg-superficie"
+                      >
+                        + Agregar factura
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>
             )}
           </Tarjeta>
 
-          {(adminEditable ||
-            (props.esAdmin &&
-              ['lista_ejecutivo', 'completa'].includes(props.estado))) && (
-            <div className="flex flex-wrap justify-end gap-2.5">
-              {props.esAdmin &&
-                ['lista_ejecutivo', 'completa'].includes(props.estado) && (
-                  <button
-                    onClick={reabrir}
-                    disabled={guardando}
-                    className="mr-auto rounded-lg border border-linea bg-white px-4 py-2 text-[13px] font-semibold transition hover:bg-superficie disabled:opacity-60"
-                  >
-                    Reabrir para el ejecutivo
-                  </button>
-                )}
-              {adminEditable && (
-                <>
-                  <button
-                    onClick={guardarSeguimiento}
-                    disabled={guardando}
-                    className="rounded-lg border border-linea bg-white px-4 py-2 text-[13px] font-semibold transition hover:bg-superficie disabled:opacity-60"
-                  >
-                    {guardando ? 'Guardando…' : 'Guardar seguimiento'}
-                  </button>
-                  <button
-                    onClick={cerrar}
-                    disabled={guardando}
-                    className="flex items-center gap-2 rounded-lg bg-petroleo px-4 py-2 text-[13px] font-semibold text-white transition hover:bg-petroleo-oscuro disabled:opacity-60"
-                  >
-                    <svg
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      className="h-[15px] w-[15px]"
+          {props.esAdmin &&
+            ['lista_ejecutivo', 'completa'].includes(props.estado) && (
+              <div className="flex flex-wrap justify-end gap-2.5">
+                <button
+                  onClick={reabrir}
+                  disabled={guardando}
+                  className="mr-auto rounded-lg border border-linea bg-white px-4 py-2 text-[13px] font-semibold transition hover:bg-superficie disabled:opacity-60"
+                >
+                  Reabrir para el ejecutivo
+                </button>
+                {adminEditable && (
+                  <>
+                    <button
+                      onClick={guardarSeguimiento}
+                      disabled={guardando}
+                      className="rounded-lg border border-linea bg-white px-4 py-2 text-[13px] font-semibold transition hover:bg-superficie disabled:opacity-60"
                     >
-                      <path d="M20 6 9 17l-5-5" />
-                    </svg>
-                    {guardando ? 'Procesando…' : 'Cerrar ficha y generar PDF'}
-                  </button>
-                </>
-              )}
-            </div>
-          )}
+                      {guardando ? 'Guardando…' : 'Guardar seguimiento'}
+                    </button>
+                    <button
+                      onClick={cerrar}
+                      disabled={guardando}
+                      className="flex items-center gap-2 rounded-lg bg-petroleo px-4 py-2 text-[13px] font-semibold text-white transition hover:bg-petroleo-oscuro disabled:opacity-60"
+                    >
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        className="h-[15px] w-[15px]"
+                      >
+                        <path d="M20 6 9 17l-5-5" />
+                      </svg>
+                      {guardando ? 'Procesando…' : 'Cerrar ficha y generar PDF'}
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
         </div>
       )}
     </div>

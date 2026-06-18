@@ -23,7 +23,6 @@ export default async function PaginaFicha({
       `id, codigo, estado, cliente_nombre, cliente_ruc, politica_pago,
        contacto_aprobacion, correo_contacto, inicio_acciones, fin_acciones,
        facturar_antes_del_fin, moneda, observaciones_ejecutivo, pdf_url,
-       num_factura_cliente, oc_cliente, hes, fecha_emision_factura, total_seguimiento,
        cotizacion:cotizaciones!inner(
          id, codigo, proyecto, ejecutivo_id,
          ejecutivo:usuarios!cotizaciones_ejecutivo_id_fkey(nombre)
@@ -37,11 +36,41 @@ export default async function PaginaFicha({
     .from('ficha_proveedores')
     .select(
       `id, orden, agencia, influencer_proveedor, ruc, descripcion, monto, banco,
-       cuenta_cci, email_proveedor, num_oc, num_factura, fecha_emision,
-       total, moneda_total, importe, moneda_importe, pago_fraccionado`,
+       cuenta_cci, email_proveedor`,
     )
     .eq('ficha_id', id)
     .order('orden');
+  const provIds = (provs ?? []).map((p) => p.id as string);
+
+  const [{ data: facCliente }, { data: facProv }] = await Promise.all([
+    supabase
+      .from('ficha_facturas_cliente')
+      .select('orden, num_factura, oc, hes, fecha_emision, total')
+      .eq('ficha_id', id)
+      .order('orden'),
+    provIds.length
+      ? supabase
+          .from('ficha_proveedor_facturas')
+          .select(
+            'ficha_proveedor_id, orden, num_oc, num_factura, fecha_emision, total, moneda_total, importe, moneda_importe',
+          )
+          .in('ficha_proveedor_id', provIds)
+          .order('orden')
+      : Promise.resolve({ data: [] as Record<string, unknown>[] }),
+  ]);
+
+  const facturasDe = (provId: string) =>
+    (facProv ?? [])
+      .filter((x) => (x.ficha_proveedor_id as string) === provId)
+      .map((x) => ({
+        numOc: (x.num_oc as string) ?? '',
+        numFactura: (x.num_factura as string) ?? '',
+        fechaEmision: (x.fecha_emision as string | null) ?? null,
+        total: x.total != null ? String(x.total) : '',
+        monedaTotal: (x.moneda_total as Moneda) ?? 'PEN',
+        importe: x.importe != null ? String(x.importe) : '',
+        monedaImporte: (x.moneda_importe as Moneda) ?? 'PEN',
+      }));
 
   const cot = uno(
     ficha.cotizacion as {
@@ -55,8 +84,7 @@ export default async function PaginaFicha({
 
   const esAdmin = ['admin', 'gerencia'].includes(sesion.usuario.rol);
   const esDueno = cot?.ejecutivo_id === sesion.usuario.id;
-  const puedeEditar =
-    (esDueno || esAdmin) && ficha.estado === 'en_proceso';
+  const puedeEditar = (esDueno || esAdmin) && ficha.estado === 'en_proceso';
 
   return (
     <FichaEditor
@@ -92,17 +120,13 @@ export default async function PaginaFicha({
         cuentaCci: (p.cuenta_cci as string) ?? '',
         emailProveedor: (p.email_proveedor as string) ?? '',
       }))}
-      seguimientoCliente={{
-        numFacturaCliente: (ficha.num_factura_cliente as string) ?? '',
-        ocCliente: (ficha.oc_cliente as string) ?? '',
-        hes: (ficha.hes as string) ?? '',
-        fechaEmisionFactura:
-          (ficha.fecha_emision_factura as string | null) ?? null,
-        totalSeguimiento:
-          ficha.total_seguimiento != null
-            ? String(ficha.total_seguimiento)
-            : '',
-      }}
+      facturasClienteIniciales={(facCliente ?? []).map((x) => ({
+        numFactura: (x.num_factura as string) ?? '',
+        oc: (x.oc as string) ?? '',
+        hes: (x.hes as string) ?? '',
+        fechaEmision: (x.fecha_emision as string | null) ?? null,
+        total: x.total != null ? String(x.total) : '',
+      }))}
       seguimientoProveedores={(provs ?? []).map((p) => ({
         id: p.id as string,
         etiqueta:
@@ -110,14 +134,7 @@ export default async function PaginaFicha({
           (p.influencer_proveedor as string) ||
           (p.descripcion as string) ||
           `Proveedor ${p.orden as number}`,
-        numOc: (p.num_oc as string) ?? '',
-        numFactura: (p.num_factura as string) ?? '',
-        fechaEmision: (p.fecha_emision as string | null) ?? null,
-        total: p.total != null ? String(p.total) : '',
-        monedaTotal: (p.moneda_total as Moneda) ?? 'PEN',
-        importe: p.importe != null ? String(p.importe) : '',
-        monedaImporte: (p.moneda_importe as Moneda) ?? 'PEN',
-        pagoFraccionado: Boolean(p.pago_fraccionado),
+        facturas: facturasDe(p.id as string),
       }))}
     />
   );
