@@ -4,6 +4,25 @@ import { revalidatePath } from 'next/cache';
 import { obtenerSesion } from '@/lib/auth';
 import { crearClienteServidor } from '@/lib/supabase/server';
 import { uno } from '@/lib/util';
+import type { Moneda } from '@/lib/calculos';
+
+export type TipoProveedor = 'empresa' | 'persona_natural';
+
+export type DatosOrden = {
+  agencia: string;
+  influencerProveedor: string;
+  razonSocial: string;
+  nombreComercial: string;
+  ruc: string;
+  tipoProveedor: TipoProveedor;
+  descripcion: string;
+  monto: number;
+  moneda: Moneda;
+  banco: string;
+  cuentaCci: string;
+  emailProveedor: string;
+  condicionesPago: string;
+};
 
 type ResultadoGenerar =
   | { ok: true; id: string; yaExistia: boolean }
@@ -92,4 +111,64 @@ export async function generarOda(
   revalidatePath(`/fichas/${prov.ficha_id as string}`);
   revalidatePath('/ordenes');
   return { ok: true, id: orden.id as string, yaExistia: false };
+}
+
+type Resultado = { ok: true } | { error: string };
+
+// Verifica sesión + rol admin/gerencia y devuelve el cliente y el estado.
+async function ctxOrden(id: string) {
+  const sesion = await obtenerSesion();
+  if (!sesion) return { ok: false as const, error: 'Sesión expirada. Vuelve a entrar.' };
+  if (!['admin', 'gerencia'].includes(sesion.usuario.rol))
+    return { ok: false as const, error: 'Solo administración puede gestionar órdenes.' };
+  const supabase = await crearClienteServidor();
+  const { data: orden } = await supabase
+    .from('ordenes_adquisicion')
+    .select('estado')
+    .eq('id', id)
+    .maybeSingle();
+  if (!orden) return { ok: false as const, error: 'No se encontró la orden.' };
+  return {
+    ok: true as const,
+    supabase,
+    estado: orden.estado as string,
+    usuarioId: sesion.usuario.id,
+  };
+}
+
+// GUARDAR (solo borrador): ajusta los datos heredados antes de emitir.
+export async function guardarOrden(
+  id: string,
+  datos: DatosOrden,
+): Promise<Resultado> {
+  const ctx = await ctxOrden(id);
+  if (!ctx.ok) return { error: ctx.error };
+  if (ctx.estado !== 'borrador')
+    return { error: 'Solo se puede editar una orden en borrador.' };
+  if (datos.monto < 0) return { error: 'El monto no puede ser negativo.' };
+
+  const { error } = await ctx.supabase
+    .from('ordenes_adquisicion')
+    .update({
+      agencia: datos.agencia.trim(),
+      influencer_proveedor: datos.influencerProveedor.trim(),
+      razon_social: datos.razonSocial.trim(),
+      nombre_comercial: datos.nombreComercial.trim(),
+      ruc: datos.ruc.trim(),
+      tipo_proveedor: datos.tipoProveedor,
+      descripcion: datos.descripcion.trim(),
+      monto: datos.monto || 0,
+      moneda: datos.moneda,
+      banco: datos.banco.trim(),
+      cuenta_cci: datos.cuentaCci.trim(),
+      email_proveedor: datos.emailProveedor.trim(),
+      condiciones_pago: datos.condicionesPago.trim(),
+    })
+    .eq('id', id)
+    .eq('estado', 'borrador');
+  if (error) return { error: 'No se pudo guardar. Intenta de nuevo.' };
+
+  revalidatePath(`/ordenes/${id}`);
+  revalidatePath('/ordenes');
+  return { ok: true };
 }

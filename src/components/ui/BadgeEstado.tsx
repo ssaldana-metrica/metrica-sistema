@@ -8,6 +8,8 @@ const ESTILOS: Record<string, { clase: string; etiqueta: string }> = {
   en_proceso: { clase: 'bg-ambar-fondo text-ambar', etiqueta: 'En proceso' },
   lista_ejecutivo: { clase: 'bg-azul-fondo text-azul', etiqueta: 'Lista del ejecutivo' },
   completa: { clase: 'bg-verde-fondo text-verde', etiqueta: 'Completa' },
+  // Estados de la orden de adquisición (Fase 3).
+  emitida: { clase: 'bg-verde-fondo text-verde', etiqueta: 'Emitida' },
 };
 
 export function BadgeEstado({ estado }: { estado: string }) {

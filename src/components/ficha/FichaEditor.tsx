@@ -305,9 +305,7 @@ export function FichaEditor(props: FichaEditorProps) {
     startTransition(async () => {
       const r = await generarOda(provId);
       if ('error' in r) setError(r.error);
-      // La pantalla de la orden se construye en el Bloque 4; por ahora
-      // refrescamos para que aparezca el enlace "Ver orden" del proveedor.
-      else router.refresh();
+      else router.push(`/ordenes/${r.id}`);
     });
   }
 
