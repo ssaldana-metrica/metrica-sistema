@@ -23,7 +23,12 @@ export type DatosPdfOda = {
     cuentaCci: string;
     email: string;
   };
-  detalles: { descripcion: string; monto: number }[];
+  detalles: {
+    descripcion: string;
+    cantidad: number;
+    precioUnitario: number;
+    total: number;
+  }[];
   moneda: Moneda;
   condicionesPago: string;
 };
@@ -75,9 +80,19 @@ const s = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 8,
   },
-  celda: { paddingVertical: 6, paddingHorizontal: 8, fontSize: 9 },
-  cDesc: { width: '75%' },
-  cMonto: { width: '25%', textAlign: 'right' },
+  celda: { paddingVertical: 6, paddingHorizontal: 8, fontSize: 8.5 },
+  cNro: { width: '7%', textAlign: 'center' },
+  cDesc: { width: '45%' },
+  cCant: { width: '12%', textAlign: 'right' },
+  cUnit: { width: '18%', textAlign: 'right' },
+  cMonto: { width: '18%', textAlign: 'right' },
+  clausTitulo: {
+    fontSize: 8.5,
+    fontFamily: 'Helvetica-Bold',
+    color: TINTA,
+    marginTop: 6,
+    marginBottom: 2,
+  },
   // Bloque "Detalle de facturación": a nombre de quién factura el proveedor.
   factNota: { fontSize: 8, color: GRIS, marginBottom: 5 },
   factTabla: { borderWidth: 1, borderColor: LINEA, borderRadius: 4 },
@@ -136,7 +151,7 @@ const fechaLarga = (iso: string | null) =>
   });
 
 function Documento({ d }: { d: DatosPdfOda }) {
-  const totalDetalles = d.detalles.reduce((a, x) => a + (x.monto || 0), 0);
+  const totalDetalles = d.detalles.reduce((a, x) => a + (x.total || 0), 0);
   const imp = calcularImpuestos(totalDetalles, d.proveedor.tipo);
   return (
     <Document
@@ -193,23 +208,32 @@ function Documento({ d }: { d: DatosPdfOda }) {
         <Text style={s.seccion}>Detalle de la compra</Text>
         <View style={s.tabla}>
           <View style={s.filaCab}>
+            <Text style={[s.cab, s.cNro]}>N°</Text>
             <Text style={[s.cab, s.cDesc]}>Descripción</Text>
-            <Text style={[s.cab, s.cMonto]}>Monto</Text>
+            <Text style={[s.cab, s.cCant]}>Cant.</Text>
+            <Text style={[s.cab, s.cUnit]}>P. unit.</Text>
+            <Text style={[s.cab, s.cMonto]}>Total</Text>
           </View>
-          {(d.detalles.length ? d.detalles : [{ descripcion: '—', monto: 0 }]).map(
-            (x, i, arr) => (
-              <View
-                key={i}
-                style={i === arr.length - 1 ? s.fila2Ult : s.fila2}
-                wrap={false}
-              >
-                <Text style={[s.celda, s.cDesc]}>{x.descripcion || '—'}</Text>
-                <Text style={[s.celda, s.cMonto]}>
-                  {formatearMonto(x.monto || 0, d.moneda)}
-                </Text>
-              </View>
-            ),
-          )}
+          {(d.detalles.length
+            ? d.detalles
+            : [{ descripcion: '—', cantidad: 0, precioUnitario: 0, total: 0 }]
+          ).map((x, i, arr) => (
+            <View
+              key={i}
+              style={i === arr.length - 1 ? s.fila2Ult : s.fila2}
+              wrap={false}
+            >
+              <Text style={[s.celda, s.cNro]}>{i + 1}</Text>
+              <Text style={[s.celda, s.cDesc]}>{x.descripcion || '—'}</Text>
+              <Text style={[s.celda, s.cCant]}>{x.cantidad}</Text>
+              <Text style={[s.celda, s.cUnit]}>
+                {formatearMonto(x.precioUnitario || 0, d.moneda)}
+              </Text>
+              <Text style={[s.celda, s.cMonto]}>
+                {formatearMonto(x.total || 0, d.moneda)}
+              </Text>
+            </View>
+          ))}
         </View>
 
         <View style={s.totales}>
@@ -250,10 +274,15 @@ function Documento({ d }: { d: DatosPdfOda }) {
         ) : null}
 
         <Text style={s.seccion}>Cláusulas</Text>
-        {CLAUSULAS_ODA.map((c, i) => (
-          <Text key={i} style={s.clausula}>
-            {i + 1}. {c}
-          </Text>
+        {CLAUSULAS_ODA.map((sec, i) => (
+          <View key={i} wrap={false}>
+            <Text style={s.clausTitulo}>{sec.titulo}</Text>
+            {sec.items.map((it, j) => (
+              <Text key={j} style={s.clausula}>
+                {it}
+              </Text>
+            ))}
+          </View>
         ))}
 
         <Text style={s.pie} fixed>

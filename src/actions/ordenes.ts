@@ -11,8 +11,13 @@ import type { TipoProveedorImp } from '@/config/impuestos';
 
 export type TipoProveedor = 'empresa' | 'persona_natural';
 
-// Cada línea del detalle de compra (la orden puede tener varias).
-export type DetalleOrden = { descripcion: string; monto: number };
+// Cada línea del detalle de compra (la orden puede tener varias). El total de
+// la línea es cantidad × precio unitario.
+export type DetalleOrden = {
+  descripcion: string;
+  cantidad: number;
+  precioUnitario: number;
+};
 
 export type DatosOrden = {
   agencia: string;
@@ -115,11 +120,14 @@ export async function generarOda(
   if (error || !orden)
     return { error: 'No se pudo crear la orden. Intenta de nuevo.' };
 
-  // Primera línea de detalle, heredada del proveedor (editable después).
+  // Primera línea de detalle, heredada del proveedor (editable después):
+  // cantidad 1, precio unitario = monto heredado, total = ese mismo monto.
   await supabase.from('orden_detalles').insert({
     orden_id: orden.id as string,
     posicion: 1,
     descripcion: (prov.descripcion as string) ?? '',
+    cantidad: 1,
+    precio_unitario: Number(prov.monto) || 0,
     monto: Number(prov.monto) || 0,
   });
 
@@ -162,14 +170,20 @@ export async function guardarOrden(
     return { error: 'Solo se puede editar una orden en borrador.' };
   if (datos.detalles.length > MAX_DETALLES)
     return { error: `Máximo ${MAX_DETALLES} líneas de detalle.` };
-  if (datos.detalles.some((d) => d.monto < 0))
-    return { error: 'Hay una línea con monto negativo.' };
+  if (datos.detalles.some((d) => d.cantidad < 0 || d.precioUnitario < 0))
+    return { error: 'Hay una línea con cantidad o precio negativo.' };
 
-  // Líneas con contenido; el total de la orden es su suma.
-  const lineas = datos.detalles.filter(
-    (d) => d.descripcion.trim() || (d.monto || 0) > 0,
-  );
-  const total = redondear(lineas.reduce((a, d) => a + (d.monto || 0), 0));
+  // Líneas con contenido; el total de cada una es cantidad × precio unitario,
+  // y el total de la orden es la suma de las líneas.
+  const lineas = datos.detalles
+    .map((d) => ({
+      descripcion: d.descripcion,
+      cantidad: d.cantidad || 0,
+      precioUnitario: d.precioUnitario || 0,
+      monto: redondear((d.cantidad || 0) * (d.precioUnitario || 0)),
+    }))
+    .filter((d) => d.descripcion.trim() || d.monto > 0);
+  const total = redondear(lineas.reduce((a, d) => a + d.monto, 0));
 
   const { error } = await ctx.supabase
     .from('ordenes_adquisicion')
@@ -203,7 +217,9 @@ export async function guardarOrden(
         orden_id: id,
         posicion: i + 1,
         descripcion: d.descripcion.trim(),
-        monto: d.monto || 0,
+        cantidad: d.cantidad,
+        precio_unitario: d.precioUnitario,
+        monto: d.monto,
       })),
     );
     if (errIns) return { error: 'No se pudo guardar el detalle.' };
@@ -239,7 +255,7 @@ export async function emitirOrden(id: string): Promise<ResultadoEmitir> {
 
   const { data: detalles } = await ctx.supabase
     .from('orden_detalles')
-    .select('descripcion, monto')
+    .select('descripcion, cantidad, precio_unitario, monto')
     .eq('orden_id', id)
     .order('posicion');
 
@@ -267,7 +283,9 @@ export async function emitirOrden(id: string): Promise<ResultadoEmitir> {
       },
       detalles: (detalles ?? []).map((x) => ({
         descripcion: (x.descripcion as string) ?? '',
-        monto: Number(x.monto) || 0,
+        cantidad: Number(x.cantidad) || 0,
+        precioUnitario: Number(x.precio_unitario) || 0,
+        total: Number(x.monto) || 0,
       })),
       moneda: o.moneda as Moneda,
       condicionesPago: (o.condiciones_pago as string) ?? '',

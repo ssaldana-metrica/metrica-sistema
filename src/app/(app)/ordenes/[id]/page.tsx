@@ -33,7 +33,7 @@ export default async function PaginaOrden({
 
   const { data: detalles } = await supabase
     .from('orden_detalles')
-    .select('descripcion, monto')
+    .select('descripcion, cantidad, precio_unitario')
     .eq('orden_id', id)
     .order('posicion');
 
@@ -67,7 +67,8 @@ export default async function PaginaOrden({
         moneda: orden.moneda as Moneda,
         detalles: (detalles ?? []).map((x) => ({
           descripcion: (x.descripcion as string) ?? '',
-          monto: Number(x.monto) || 0,
+          cantidad: Number(x.cantidad) || 0,
+          precioUnitario: Number(x.precio_unitario) || 0,
         })),
         banco: (orden.banco as string) ?? '',
         cuentaCci: (orden.cuenta_cci as string) ?? '',

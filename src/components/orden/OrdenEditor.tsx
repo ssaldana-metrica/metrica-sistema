@@ -14,7 +14,16 @@ import { BadgeEstado } from '@/components/ui/BadgeEstado';
 import { calcularImpuestos } from '@/config/impuestos';
 import { formatearMonto, redondear, type Moneda } from '@/lib/calculos';
 
-type LineaFila = { descripcion: string; monto: string };
+type LineaFila = {
+  descripcion: string;
+  cantidad: string;
+  precioUnitario: string;
+};
+const lineaVacia = (): LineaFila => ({
+  descripcion: '',
+  cantidad: '1',
+  precioUnitario: '',
+});
 
 export type OrdenEditorProps = {
   ordenId: string;
@@ -39,9 +48,10 @@ export function OrdenEditor(props: OrdenEditorProps) {
     props.inicial.detalles.length
       ? props.inicial.detalles.map((x) => ({
           descripcion: x.descripcion,
-          monto: x.monto ? String(x.monto) : '',
+          cantidad: x.cantidad ? String(x.cantidad) : '1',
+          precioUnitario: x.precioUnitario ? String(x.precioUnitario) : '',
         }))
-      : [{ descripcion: '', monto: '' }],
+      : [lineaVacia()],
   );
   const [modalAnular, setModalAnular] = useState(false);
   const [motivo, setMotivo] = useState('');
@@ -52,19 +62,21 @@ export function OrdenEditor(props: OrdenEditorProps) {
     setD((x) => ({ ...x, [k]: v }));
   const fijarLinea = (i: number, k: keyof LineaFila, v: string) =>
     setLineas((ls) => ls.map((l, j) => (j === i ? { ...l, [k]: v } : l)));
-  const agregarLinea = () =>
-    setLineas((ls) => [...ls, { descripcion: '', monto: '' }]);
+  const agregarLinea = () => setLineas((ls) => [...ls, lineaVacia()]);
   const quitarLinea = (i: number) =>
     setLineas((ls) => (ls.length === 1 ? ls : ls.filter((_, j) => j !== i)));
 
-  const total = lineas.reduce((a, l) => a + (parseFloat(l.monto) || 0), 0);
+  const totalLinea = (l: LineaFila) =>
+    redondear((parseFloat(l.cantidad) || 0) * (parseFloat(l.precioUnitario) || 0));
+  const total = lineas.reduce((a, l) => a + totalLinea(l), 0);
   const imp = calcularImpuestos(redondear(total), d.tipoProveedor);
 
   const payload = (): DatosOrden => ({
     ...d,
     detalles: lineas.map((l) => ({
       descripcion: l.descripcion,
-      monto: parseFloat(l.monto) || 0,
+      cantidad: parseFloat(l.cantidad) || 0,
+      precioUnitario: parseFloat(l.precioUnitario) || 0,
     })),
   });
 
@@ -255,47 +267,80 @@ export function OrdenEditor(props: OrdenEditorProps) {
             </Campo>
           </div>
 
-          <div className="space-y-2">
-            {lineas.map((l, i) => (
-              <div key={i} className="flex items-end gap-2">
-                <div className="flex-1">
-                  <span className="text-[11px] font-semibold uppercase tracking-wide text-tinta-tenue">
-                    Descripción {i + 1}
-                  </span>
-                  <input
-                    value={l.descripcion}
-                    disabled={!editable}
-                    placeholder="Ej. Producción de 3 reels"
-                    onChange={(e) =>
-                      fijarLinea(i, 'descripcion', e.target.value)
-                    }
-                    className={inputCls}
-                  />
-                </div>
-                <div className="w-40">
-                  <span className="text-[11px] font-semibold uppercase tracking-wide text-tinta-tenue">
-                    Monto
-                  </span>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={l.monto}
-                    disabled={!editable}
-                    onChange={(e) => fijarLinea(i, 'monto', e.target.value)}
-                    className={`${inputCls} text-right font-mono`}
-                  />
-                </div>
-                <button
-                  onClick={() => quitarLinea(i)}
-                  disabled={!editable || lineas.length === 1}
-                  title="Quitar línea"
-                  className="mb-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-rojo transition hover:bg-rojo-fondo disabled:opacity-30"
-                >
-                  ×
-                </button>
-              </div>
-            ))}
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[640px] border-collapse">
+              <thead>
+                <tr className="text-left text-[10.5px] uppercase tracking-wide text-tinta-tenue">
+                  <th className="w-10 px-1 py-1 font-semibold">N°</th>
+                  <th className="px-1 py-1 font-semibold">Descripción</th>
+                  <th className="w-20 px-1 py-1 text-right font-semibold">Cant.</th>
+                  <th className="w-32 px-1 py-1 text-right font-semibold">
+                    P. unitario
+                  </th>
+                  <th className="w-32 px-1 py-1 text-right font-semibold">Total</th>
+                  <th className="w-8" />
+                </tr>
+              </thead>
+              <tbody>
+                {lineas.map((l, i) => (
+                  <tr key={i} className="border-t border-linea-suave">
+                    <td className="px-1 py-1 text-center font-mono text-[12.5px] text-tinta-tenue">
+                      {i + 1}
+                    </td>
+                    <td className="px-1 py-1">
+                      <input
+                        value={l.descripcion}
+                        disabled={!editable}
+                        placeholder="Ej. Producción de 3 reels"
+                        onChange={(e) =>
+                          fijarLinea(i, 'descripcion', e.target.value)
+                        }
+                        className={celdaCls}
+                      />
+                    </td>
+                    <td className="px-1 py-1">
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={l.cantidad}
+                        disabled={!editable}
+                        onChange={(e) =>
+                          fijarLinea(i, 'cantidad', e.target.value)
+                        }
+                        className={`${celdaCls} text-right font-mono`}
+                      />
+                    </td>
+                    <td className="px-1 py-1">
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={l.precioUnitario}
+                        disabled={!editable}
+                        onChange={(e) =>
+                          fijarLinea(i, 'precioUnitario', e.target.value)
+                        }
+                        className={`${celdaCls} text-right font-mono`}
+                      />
+                    </td>
+                    <td className="px-2 py-1 text-right font-mono text-[12.5px] font-semibold">
+                      {formatearMonto(totalLinea(l), d.moneda)}
+                    </td>
+                    <td className="px-1 py-1 text-center">
+                      <button
+                        onClick={() => quitarLinea(i)}
+                        disabled={!editable || lineas.length === 1}
+                        title="Quitar línea"
+                        className="flex h-7 w-7 items-center justify-center rounded-md text-rojo transition hover:bg-rojo-fondo disabled:opacity-30"
+                      >
+                        ×
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
 
           {editable && (
@@ -460,6 +505,8 @@ export function OrdenEditor(props: OrdenEditorProps) {
 
 const inputCls =
   'mt-1 w-full rounded-md border border-linea bg-white px-3 py-2 text-[13px] outline-none transition focus:border-petroleo disabled:bg-superficie disabled:text-tinta-suave';
+const celdaCls =
+  'w-full rounded-md border border-linea bg-white px-2 py-1.5 text-[12.5px] outline-none focus:border-petroleo disabled:bg-superficie disabled:text-tinta-suave';
 
 function Tarjeta({
   titulo,
