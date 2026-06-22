@@ -70,6 +70,25 @@ export default async function PaginaFicha({
         monedaTotal: (x.moneda_total as Moneda) ?? 'PEN',
       }));
 
+  // Órdenes de adquisición ya generadas para esta ficha (por proveedor).
+  const esAdminRol = ['admin', 'gerencia'].includes(sesion.usuario.rol);
+  const { data: odas } = esAdminRol
+    ? await supabase
+        .from('ordenes_adquisicion')
+        .select('id, codigo, estado, ficha_proveedor_id')
+        .eq('ficha_id', id)
+    : { data: [] as Record<string, unknown>[] };
+  const odasPorProveedor: Record<
+    string,
+    { id: string; codigo: string; estado: string }
+  > = {};
+  for (const o of odas ?? [])
+    odasPorProveedor[o.ficha_proveedor_id as string] = {
+      id: o.id as string,
+      codigo: o.codigo as string,
+      estado: o.estado as string,
+    };
+
   const cot = uno(
     ficha.cotizacion as {
       id: string;
@@ -96,6 +115,8 @@ export default async function PaginaFicha({
       ejecutivo={uno(cot?.ejecutivo ?? null)?.nombre ?? '—'}
       puedeEditar={puedeEditar}
       esAdmin={esAdmin}
+      puedeGenerarOda={esAdmin && ficha.estado === 'completa'}
+      odasPorProveedor={odasPorProveedor}
       pdfHref={ficha.pdf_url ? `/fichas/${ficha.id as string}/pdf` : null}
       inicial={{
         clienteNombre: (ficha.cliente_nombre as string) ?? '',

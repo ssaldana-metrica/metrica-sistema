@@ -12,6 +12,7 @@ import {
   type DatosEjecutivo,
   type FichaProveedorEntrada,
 } from '@/actions/fichas';
+import { generarOda } from '@/actions/ordenes';
 import { BadgeEstado } from '@/components/ui/BadgeEstado';
 import { formatearMonto, redondear, type Moneda } from '@/lib/calculos';
 
@@ -96,6 +97,8 @@ export type FichaEditorProps = {
   ejecutivo: string;
   puedeEditar: boolean;
   esAdmin: boolean;
+  puedeGenerarOda: boolean;
+  odasPorProveedor: Record<string, { id: string; codigo: string; estado: string }>;
   pdfHref: string | null;
   inicial: DatosEjecutivo;
   proveedoresIniciales: ProveedorFila[];
@@ -296,6 +299,18 @@ export function FichaEditor(props: FichaEditorProps) {
   }
 
   // Reapertura para administración: sin correo ni aviso al ejecutivo.
+  function generarOrden(provId: string) {
+    setError(null);
+    setAviso(null);
+    startTransition(async () => {
+      const r = await generarOda(provId);
+      if ('error' in r) setError(r.error);
+      // La pantalla de la orden se construye en el Bloque 4; por ahora
+      // refrescamos para que aparezca el enlace "Ver orden" del proveedor.
+      else router.refresh();
+    });
+  }
+
   function reabrirAdmin() {
     setError(null);
     setAviso(null);
@@ -800,8 +815,26 @@ export function FichaEditor(props: FichaEditorProps) {
                     key={g.id}
                     className="rounded-lg border border-linea-suave p-4"
                   >
-                    <div className="mb-3 text-[13px] font-semibold">
-                      {g.etiqueta}
+                    <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-[13px] font-semibold">
+                        {g.etiqueta}
+                      </span>
+                      {props.odasPorProveedor[g.id] ? (
+                        <Link
+                          href={`/ordenes/${props.odasPorProveedor[g.id].id}`}
+                          className="inline-flex items-center gap-1.5 rounded-md border border-petroleo/30 bg-verde-fondo px-2.5 py-1 text-[11.5px] font-semibold text-petroleo-oscuro transition hover:bg-verde-fondo/70"
+                        >
+                          {props.odasPorProveedor[g.id].codigo} · Ver orden →
+                        </Link>
+                      ) : props.puedeGenerarOda ? (
+                        <button
+                          onClick={() => generarOrden(g.id)}
+                          disabled={guardando}
+                          className="inline-flex items-center gap-1.5 rounded-md bg-petroleo px-2.5 py-1 text-[11.5px] font-semibold text-white transition hover:bg-petroleo-oscuro disabled:opacity-60"
+                        >
+                          {guardando ? 'Generando…' : '+ Generar ODA'}
+                        </button>
+                      ) : null}
                     </div>
                     <div className="space-y-3">
                       {g.facturas.map((f, fi) => (
