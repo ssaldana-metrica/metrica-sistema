@@ -63,6 +63,21 @@ const s = StyleSheet.create({
   datoK: { fontSize: 7.5, color: GRIS, textTransform: 'uppercase', letterSpacing: 0.5 },
   datoV: { fontSize: 9.5, marginTop: 1.5 },
   parrafo: { fontSize: 9.5, marginBottom: 4 },
+  // Bloque "Detalle de facturación": a nombre de quién factura el proveedor.
+  factNota: { fontSize: 8, color: GRIS, marginBottom: 5 },
+  factTabla: { borderWidth: 1, borderColor: LINEA, borderRadius: 4 },
+  factFila: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: LINEA },
+  factFilaUlt: { flexDirection: 'row' },
+  factK: {
+    width: '24%',
+    backgroundColor: '#F4F3EC',
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    fontSize: 8,
+    fontFamily: 'Helvetica-Bold',
+    color: '#4C564F',
+  },
+  factV: { width: '76%', paddingVertical: 6, paddingHorizontal: 8, fontSize: 9.5 },
   totales: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 6 },
   caja: { width: 240 },
   fila: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 3.5 },
@@ -142,6 +157,21 @@ function Documento({ d }: { d: DatosPdfOda }) {
           <Dato k="Banco" v={d.proveedor.banco || '—'} />
           <Dato k="Cuenta / CCI" v={d.proveedor.cuentaCci || '—'} />
           <Dato k="Email" v={d.proveedor.email || '—'} />
+        </View>
+
+        <Text style={s.seccion}>Detalle de facturación</Text>
+        <Text style={s.factNota}>
+          El proveedor debe emitir su comprobante a nombre de:
+        </Text>
+        <View style={s.factTabla}>
+          <View style={s.factFila}>
+            <Text style={s.factK}>Razón social</Text>
+            <Text style={s.factV}>{EMPRESA.razonSocial}</Text>
+          </View>
+          <View style={s.factFilaUlt}>
+            <Text style={s.factK}>RUC</Text>
+            <Text style={s.factV}>{EMPRESA.ruc}</Text>
+          </View>
         </View>
 
         <Text style={s.seccion}>Detalle</Text>
