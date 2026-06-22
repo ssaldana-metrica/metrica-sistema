@@ -52,7 +52,7 @@ export default async function PaginaFicha({
       ? supabase
           .from('ficha_proveedor_facturas')
           .select(
-            'ficha_proveedor_id, orden, num_oc, num_factura, fecha_emision, total, moneda_total, importe, moneda_importe',
+            'ficha_proveedor_id, orden, num_oc, num_factura, fecha_emision, total, moneda_total',
           )
           .in('ficha_proveedor_id', provIds)
           .order('orden')
@@ -68,8 +68,6 @@ export default async function PaginaFicha({
         fechaEmision: (x.fecha_emision as string | null) ?? null,
         total: x.total != null ? String(x.total) : '',
         monedaTotal: (x.moneda_total as Moneda) ?? 'PEN',
-        importe: x.importe != null ? String(x.importe) : '',
-        monedaImporte: (x.moneda_importe as Moneda) ?? 'PEN',
       }));
 
   const cot = uno(
@@ -88,6 +86,7 @@ export default async function PaginaFicha({
 
   return (
     <FichaEditor
+      key={`${ficha.id as string}-${ficha.estado as string}`}
       fichaId={ficha.id as string}
       codigo={ficha.codigo as string}
       estado={ficha.estado as string}
@@ -129,6 +128,7 @@ export default async function PaginaFicha({
       }))}
       seguimientoProveedores={(provs ?? []).map((p) => ({
         id: p.id as string,
+        orden: p.orden as number,
         etiqueta:
           (p.agencia as string) ||
           (p.influencer_proveedor as string) ||

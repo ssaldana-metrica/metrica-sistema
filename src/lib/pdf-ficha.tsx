@@ -23,9 +23,16 @@ export type FacturaProveedorPdf = {
   fechaEmision: string | null;
   total: number | null;
   monedaTotal: Moneda;
-  importe: number | null;
-  monedaImporte: Moneda;
 };
+
+// Suma de montos agrupada por moneda (los totales pueden venir en S/ o $).
+function totalesPorMoneda(items: { total: number | null; moneda: Moneda }[]) {
+  const acc: Record<Moneda, number> = { PEN: 0, USD: 0 };
+  for (const it of items) if (it.total != null) acc[it.moneda] += it.total;
+  return (['PEN', 'USD'] as Moneda[])
+    .filter((m) => acc[m] > 0)
+    .map((m) => formatearMonto(acc[m], m));
+}
 
 export type DatosPdfFicha = {
   codigo: string;
@@ -116,11 +123,21 @@ const s = StyleSheet.create({
   provMeta: { fontSize: 7.6, color: GRIS, marginTop: 2 },
   provMonto: { fontSize: 9, fontFamily: 'Helvetica-Bold', textAlign: 'right' },
   // Sub-tabla de facturas del proveedor
-  pfOc: { width: '20%' },
-  pfFact: { width: '22%' },
-  pfFecha: { width: '20%' },
-  pfTotal: { width: '19%', textAlign: 'right' },
-  pfImporte: { width: '19%', textAlign: 'right' },
+  pfOc: { width: '26%' },
+  pfFact: { width: '28%' },
+  pfFecha: { width: '24%' },
+  pfTotal: { width: '22%', textAlign: 'right' },
+  totalFila: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 10,
+    marginTop: 6,
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: LINEA,
+  },
+  totalEtq: { fontSize: 8, color: GRIS, textTransform: 'uppercase', letterSpacing: 0.4 },
+  totalVal: { fontSize: 10, fontFamily: 'Helvetica-Bold' },
   vacio: { fontSize: 7.8, color: GRIS, fontStyle: 'italic', marginTop: 4 },
   pie: {
     position: 'absolute',
@@ -199,30 +216,41 @@ function Documento({ d }: { d: DatosPdfFicha }) {
         {d.facturasCliente.length === 0 ? (
           <Text style={s.vacio}>Sin facturas registradas.</Text>
         ) : (
-          <View style={s.tabla}>
-            <View style={s.filaCab}>
-              <Text style={[s.cab, s.fcFact]}>N° factura</Text>
-              <Text style={[s.cab, s.fcOc]}>OC</Text>
-              <Text style={[s.cab, s.fcHes]}>HES</Text>
-              <Text style={[s.cab, s.fcFecha]}>Emisión</Text>
-              <Text style={[s.cab, s.fcTotal]}>Total</Text>
-            </View>
-            {d.facturasCliente.map((fc, i) => (
-              <View
-                key={i}
-                style={i === d.facturasCliente.length - 1 ? s.filaUltima : s.fila}
-                wrap={false}
-              >
-                <Text style={[s.celda, s.fcFact]}>{fc.numFactura || '—'}</Text>
-                <Text style={[s.celda, s.fcOc]}>{fc.oc || '—'}</Text>
-                <Text style={[s.celda, s.fcHes]}>{fc.hes || '—'}</Text>
-                <Text style={[s.celda, s.fcFecha]}>{fechaLarga(fc.fechaEmision)}</Text>
-                <Text style={[s.celda, s.fcTotal]}>
-                  {montoOpt(fc.total, d.servicio.moneda)}
-                </Text>
+          <>
+            <View style={s.tabla}>
+              <View style={s.filaCab}>
+                <Text style={[s.cab, s.fcFact]}>N° factura</Text>
+                <Text style={[s.cab, s.fcOc]}>OC</Text>
+                <Text style={[s.cab, s.fcHes]}>HES</Text>
+                <Text style={[s.cab, s.fcFecha]}>Emisión</Text>
+                <Text style={[s.cab, s.fcTotal]}>Total</Text>
               </View>
-            ))}
-          </View>
+              {d.facturasCliente.map((fc, i) => (
+                <View
+                  key={i}
+                  style={i === d.facturasCliente.length - 1 ? s.filaUltima : s.fila}
+                  wrap={false}
+                >
+                  <Text style={[s.celda, s.fcFact]}>{fc.numFactura || '—'}</Text>
+                  <Text style={[s.celda, s.fcOc]}>{fc.oc || '—'}</Text>
+                  <Text style={[s.celda, s.fcHes]}>{fc.hes || '—'}</Text>
+                  <Text style={[s.celda, s.fcFecha]}>{fechaLarga(fc.fechaEmision)}</Text>
+                  <Text style={[s.celda, s.fcTotal]}>
+                    {montoOpt(fc.total, d.servicio.moneda)}
+                  </Text>
+                </View>
+              ))}
+            </View>
+            <View style={s.totalFila}>
+              <Text style={s.totalEtq}>Total facturado al cliente</Text>
+              <Text style={s.totalVal}>
+                {formatearMonto(
+                  d.facturasCliente.reduce((a, fc) => a + (fc.total ?? 0), 0),
+                  d.servicio.moneda,
+                )}
+              </Text>
+            </View>
+          </>
         )}
 
         <Text style={s.seccion}>Proveedores que cobran</Text>
@@ -251,32 +279,41 @@ function Documento({ d }: { d: DatosPdfFicha }) {
               {p.facturas.length === 0 ? (
                 <Text style={s.vacio}>Sin facturas de seguimiento.</Text>
               ) : (
-                <View style={[s.tabla, { marginTop: 6 }]}>
-                  <View style={s.filaCab}>
-                    <Text style={[s.cab, s.pfOc]}>N° OC</Text>
-                    <Text style={[s.cab, s.pfFact]}>N° factura</Text>
-                    <Text style={[s.cab, s.pfFecha]}>Emisión</Text>
-                    <Text style={[s.cab, s.pfTotal]}>Total</Text>
-                    <Text style={[s.cab, s.pfImporte]}>Importe</Text>
-                  </View>
-                  {p.facturas.map((fp, j) => (
-                    <View
-                      key={j}
-                      style={j === p.facturas.length - 1 ? s.filaUltima : s.fila}
-                      wrap={false}
-                    >
-                      <Text style={[s.celda, s.pfOc]}>{fp.numOc || '—'}</Text>
-                      <Text style={[s.celda, s.pfFact]}>{fp.numFactura || '—'}</Text>
-                      <Text style={[s.celda, s.pfFecha]}>{fechaLarga(fp.fechaEmision)}</Text>
-                      <Text style={[s.celda, s.pfTotal]}>
-                        {montoOpt(fp.total, fp.monedaTotal)}
-                      </Text>
-                      <Text style={[s.celda, s.pfImporte]}>
-                        {montoOpt(fp.importe, fp.monedaImporte)}
-                      </Text>
+                <>
+                  <View style={[s.tabla, { marginTop: 6 }]}>
+                    <View style={s.filaCab}>
+                      <Text style={[s.cab, s.pfOc]}>N° OC</Text>
+                      <Text style={[s.cab, s.pfFact]}>N° factura</Text>
+                      <Text style={[s.cab, s.pfFecha]}>Emisión</Text>
+                      <Text style={[s.cab, s.pfTotal]}>Total</Text>
                     </View>
-                  ))}
-                </View>
+                    {p.facturas.map((fp, j) => (
+                      <View
+                        key={j}
+                        style={j === p.facturas.length - 1 ? s.filaUltima : s.fila}
+                        wrap={false}
+                      >
+                        <Text style={[s.celda, s.pfOc]}>{fp.numOc || '—'}</Text>
+                        <Text style={[s.celda, s.pfFact]}>{fp.numFactura || '—'}</Text>
+                        <Text style={[s.celda, s.pfFecha]}>{fechaLarga(fp.fechaEmision)}</Text>
+                        <Text style={[s.celda, s.pfTotal]}>
+                          {montoOpt(fp.total, fp.monedaTotal)}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                  <View style={s.totalFila}>
+                    <Text style={s.totalEtq}>Total seguimiento</Text>
+                    <Text style={s.totalVal}>
+                      {totalesPorMoneda(
+                        p.facturas.map((fp) => ({
+                          total: fp.total,
+                          moneda: fp.monedaTotal,
+                        })),
+                      ).join('  +  ') || '—'}
+                    </Text>
+                  </View>
+                </>
               )}
             </View>
           );

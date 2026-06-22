@@ -61,8 +61,6 @@ type FacturaProvFila = {
   fechaEmision: string | null;
   total: string;
   monedaTotal: Moneda;
-  importe: string;
-  monedaImporte: Moneda;
 };
 const facturaProvVacia = (m: Moneda): FacturaProvFila => ({
   numOc: '',
@@ -70,15 +68,23 @@ const facturaProvVacia = (m: Moneda): FacturaProvFila => ({
   fechaEmision: null,
   total: '',
   monedaTotal: m,
-  importe: '',
-  monedaImporte: m,
 });
 
 type SeguimientoProvGrupo = {
   id: string;
+  orden: number;
   etiqueta: string;
   facturas: FacturaProvFila[];
 };
+
+// Suma de totales por moneda, para mostrar el total de un proveedor.
+function totalesPorMoneda(facturas: { total: string; monedaTotal: Moneda }[]) {
+  const acc: Record<Moneda, number> = { PEN: 0, USD: 0 };
+  for (const f of facturas) acc[f.monedaTotal] += parseFloat(f.total) || 0;
+  return (['PEN', 'USD'] as Moneda[])
+    .filter((m) => acc[m] > 0)
+    .map((m) => formatearMonto(acc[m], m));
+}
 
 export type FichaEditorProps = {
   fichaId: string;
@@ -103,6 +109,8 @@ export function FichaEditor(props: FichaEditorProps) {
   const [guardando, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
+  const [modalReabrir, setModalReabrir] = useState(false);
+  const [notaReapertura, setNotaReapertura] = useState('');
 
   const [datos, setDatos] = useState<DatosEjecutivo>(props.inicial);
   const [provs, setProvs] = useState<ProveedorFila[]>(
@@ -241,17 +249,20 @@ export function FichaEditor(props: FichaEditorProps) {
     }));
   const segProvsPayload = () =>
     segProvs.map((g) => ({
-      fichaProveedorId: g.id,
+      orden: g.orden,
       facturas: g.facturas.map((f) => ({
         numOc: f.numOc,
         numFactura: f.numFactura,
         fechaEmision: f.fechaEmision,
         total: numOnull(f.total),
         monedaTotal: f.monedaTotal,
-        importe: numOnull(f.importe),
-        monedaImporte: f.monedaImporte,
       })),
     }));
+
+  const totalCliente = facCliente.reduce(
+    (a, f) => a + (parseFloat(f.total) || 0),
+    0,
+  );
 
   function guardarSeguimiento() {
     setError(null);
@@ -284,13 +295,29 @@ export function FichaEditor(props: FichaEditorProps) {
     });
   }
 
-  function reabrir() {
+  // Reapertura para administración: sin correo ni aviso al ejecutivo.
+  function reabrirAdmin() {
     setError(null);
     setAviso(null);
     startTransition(async () => {
-      const r = await reabrirFicha(props.fichaId);
+      const r = await reabrirFicha(props.fichaId, 'administracion');
       if ('error' in r) setError(r.error);
       else router.refresh();
+    });
+  }
+
+  // Reapertura para el ejecutivo: con nota opcional, se le avisa por correo.
+  function reabrirEjecutivo() {
+    setError(null);
+    setAviso(null);
+    startTransition(async () => {
+      const r = await reabrirFicha(props.fichaId, 'ejecutivo', notaReapertura);
+      if ('error' in r) setError(r.error);
+      else {
+        setModalReabrir(false);
+        setNotaReapertura('');
+        router.refresh();
+      }
     });
   }
 
@@ -740,14 +767,24 @@ export function FichaEditor(props: FichaEditorProps) {
                 </div>
               ))}
             </div>
-            {adminEditable && (
-              <button
-                onClick={agregarFacCliente}
-                className="mt-3 rounded-lg border border-linea bg-white px-3 py-1.5 text-[12.5px] font-semibold transition hover:bg-superficie"
-              >
-                + Agregar factura del cliente
-              </button>
-            )}
+            <div className="mt-3 flex items-center justify-between">
+              {adminEditable ? (
+                <button
+                  onClick={agregarFacCliente}
+                  className="rounded-lg border border-linea bg-white px-3 py-1.5 text-[12.5px] font-semibold transition hover:bg-superficie"
+                >
+                  + Agregar factura del cliente
+                </button>
+              ) : (
+                <span />
+              )}
+              <div className="text-[13px]">
+                <span className="text-tinta-tenue">Total facturado: </span>
+                <span className="font-mono font-semibold">
+                  {formatearMonto(redondear(totalCliente), datos.moneda)}
+                </span>
+              </div>
+            </div>
           </Tarjeta>
 
           {/* Facturas por proveedor (repetibles, moneda por línea) */}
@@ -841,31 +878,28 @@ export function FichaEditor(props: FichaEditorProps) {
                                 }
                               />
                             </Campo>
-                            <Campo label="Importe del proveedor">
-                              <MontoMoneda
-                                valor={f.importe}
-                                moneda={f.monedaImporte}
-                                disabled={!adminEditable}
-                                onValor={(v) =>
-                                  fijarFacProv(gi, fi, 'importe', v)
-                                }
-                                onMoneda={(m) =>
-                                  fijarFacProv(gi, fi, 'monedaImporte', m)
-                                }
-                              />
-                            </Campo>
                           </div>
                         </div>
                       ))}
                     </div>
-                    {adminEditable && (
-                      <button
-                        onClick={() => agregarFacProv(gi)}
-                        className="mt-3 rounded-lg border border-linea bg-white px-3 py-1.5 text-[12px] font-semibold transition hover:bg-superficie"
-                      >
-                        + Agregar factura
-                      </button>
-                    )}
+                    <div className="mt-3 flex items-center justify-between">
+                      {adminEditable ? (
+                        <button
+                          onClick={() => agregarFacProv(gi)}
+                          className="rounded-lg border border-linea bg-white px-3 py-1.5 text-[12px] font-semibold transition hover:bg-superficie"
+                        >
+                          + Agregar factura
+                        </button>
+                      ) : (
+                        <span />
+                      )}
+                      <div className="text-[13px]">
+                        <span className="text-tinta-tenue">Total: </span>
+                        <span className="font-mono font-semibold">
+                          {totalesPorMoneda(g.facturas).join('  +  ') || '—'}
+                        </span>
+                      </div>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -875,13 +909,25 @@ export function FichaEditor(props: FichaEditorProps) {
           {props.esAdmin &&
             ['lista_ejecutivo', 'completa'].includes(props.estado) && (
               <div className="flex flex-wrap justify-end gap-2.5">
-                <button
-                  onClick={reabrir}
-                  disabled={guardando}
-                  className="mr-auto rounded-lg border border-linea bg-white px-4 py-2 text-[13px] font-semibold transition hover:bg-superficie disabled:opacity-60"
-                >
-                  Reabrir para el ejecutivo
-                </button>
+                <div className="mr-auto flex flex-wrap gap-2.5">
+                  {props.estado === 'completa' && (
+                    <button
+                      onClick={reabrirAdmin}
+                      disabled={guardando}
+                      title="Reabre la ficha para corregir el seguimiento, sin avisar al ejecutivo"
+                      className="rounded-lg border border-linea bg-white px-4 py-2 text-[13px] font-semibold transition hover:bg-superficie disabled:opacity-60"
+                    >
+                      Reabrir para administración
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setModalReabrir(true)}
+                    disabled={guardando}
+                    className="rounded-lg border border-linea bg-white px-4 py-2 text-[13px] font-semibold transition hover:bg-superficie disabled:opacity-60"
+                  >
+                    Reabrir para el ejecutivo
+                  </button>
+                </div>
                 {adminEditable && (
                   <>
                     <button
@@ -911,6 +957,45 @@ export function FichaEditor(props: FichaEditorProps) {
                 )}
               </div>
             )}
+        </div>
+      )}
+
+      {/* Modal: reabrir para el ejecutivo con mensaje opcional */}
+      {modalReabrir && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-lateral/45 p-6">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-flotante">
+            <h3 className="text-[15px] font-bold">
+              Reabrir para el ejecutivo
+            </h3>
+            <p className="mt-1 text-[12.5px] text-tinta-suave">
+              La ficha volverá a {props.ejecutivo} (estado en proceso) y le
+              llegará un correo. Puedes escribirle un mensaje (opcional).
+            </p>
+            <textarea
+              value={notaReapertura}
+              onChange={(e) => setNotaReapertura(e.target.value)}
+              rows={4}
+              autoFocus
+              placeholder="Ej. Corrige el RUC del proveedor 2 y vuelve a marcar tu parte como lista."
+              className="mt-4 w-full rounded-lg border border-linea bg-white px-3 py-2.5 text-[13px] outline-none transition focus:border-petroleo"
+            />
+            <div className="mt-4 flex justify-end gap-2.5">
+              <button
+                onClick={() => setModalReabrir(false)}
+                disabled={guardando}
+                className="rounded-lg border border-linea bg-white px-4 py-2 text-[13px] font-semibold transition hover:bg-superficie"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={reabrirEjecutivo}
+                disabled={guardando}
+                className="rounded-lg bg-petroleo px-4 py-2 text-[13px] font-semibold text-white transition hover:bg-petroleo-oscuro disabled:opacity-60"
+              >
+                {guardando ? 'Enviando…' : 'Reabrir y avisar'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

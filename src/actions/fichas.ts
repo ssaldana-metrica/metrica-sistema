@@ -43,19 +43,19 @@ export type FacturaClienteEntrada = {
   total: number | null;
 };
 
-// Cada factura de un proveedor (varias por proveedor), con moneda por línea.
+// Cada factura de un proveedor (varias por proveedor), con su moneda.
 export type FacturaProveedorEntrada = {
   numOc: string;
   numFactura: string;
   fechaEmision: string | null;
   total: number | null;
   monedaTotal: Moneda;
-  importe: number | null;
-  monedaImporte: Moneda;
 };
 
+// Se empareja por ORDEN del proveedor (estable), no por id: el id cambia
+// cuando el ejecutivo rehace su tabla, el orden no.
 export type SeguimientoProveedorEntrada = {
-  fichaProveedorId: string;
+  orden: number;
   facturas: FacturaProveedorEntrada[];
 };
 
@@ -351,20 +351,25 @@ async function persistirSeguimiento(
     if (error) return 'No se pudieron guardar las facturas del cliente.';
   }
 
-  // Proveedores válidos de esta ficha (evita tocar filas de otras fichas).
+  // Proveedores de esta ficha, mapeados por ORDEN → id actual (el id puede
+  // haber cambiado tras un guardado del ejecutivo; el orden se conserva).
   const { data: provRows } = await supabase
     .from('ficha_proveedores')
-    .select('id')
+    .select('id, orden')
     .eq('ficha_id', fichaId);
-  const idsValidos = new Set((provRows ?? []).map((r) => r.id as string));
+  const idPorOrden = new Map<number, string>();
+  (provRows ?? []).forEach((r) =>
+    idPorOrden.set(r.orden as number, r.id as string),
+  );
 
   for (const p of proveedores) {
-    if (!idsValidos.has(p.fichaProveedorId)) continue;
+    const provId = idPorOrden.get(p.orden);
+    if (!provId) continue;
 
     const { error: errDelP } = await supabase
       .from('ficha_proveedor_facturas')
       .delete()
-      .eq('ficha_proveedor_id', p.fichaProveedorId);
+      .eq('ficha_proveedor_id', provId);
     if (errDelP) return 'No se pudo actualizar las facturas de un proveedor.';
 
     const filasP = p.facturas
@@ -373,19 +378,16 @@ async function persistirSeguimiento(
           f.numOc.trim() ||
           f.numFactura.trim() ||
           f.fechaEmision ||
-          f.total != null ||
-          f.importe != null,
+          f.total != null,
       )
       .map((f, i) => ({
-        ficha_proveedor_id: p.fichaProveedorId,
+        ficha_proveedor_id: provId,
         orden: i + 1,
         num_oc: f.numOc.trim(),
         num_factura: f.numFactura.trim(),
         fecha_emision: fechaOnull(f.fechaEmision),
         total: f.total,
         moneda_total: f.monedaTotal,
-        importe: f.importe,
-        moneda_importe: f.monedaImporte,
       }));
     if (filasP.length > 0) {
       const { error } = await supabase
@@ -442,8 +444,6 @@ async function generarYGuardarPdf(
         fechaEmision: (x.fecha_emision as string | null) ?? null,
         total: x.total != null ? Number(x.total) : null,
         monedaTotal: (x.moneda_total as Moneda) ?? 'PEN',
-        importe: x.importe != null ? Number(x.importe) : null,
-        monedaImporte: (x.moneda_importe as Moneda) ?? 'PEN',
       }));
 
   let pdf: Buffer;
@@ -568,9 +568,17 @@ export async function cerrarFicha(
   return { ok: true, urlDescarga: firmado?.signedUrl ?? null };
 }
 
-// REABRIR (solo admin/gerencia): devuelve la ficha a 'en_proceso' con traza.
-// El PDF queda obsoleto (se regenera al volver a cerrarla).
-export async function reabrirFicha(fichaId: string): Promise<Resultado> {
+// REABRIR (solo admin/gerencia). Dos modos:
+//  - 'ejecutivo': vuelve a 'en_proceso' y AVISA al ejecutivo por correo
+//    (con una nota opcional escrita por quien reabre).
+//  - 'administracion': vuelve a 'lista_ejecutivo' para que el admin corrija
+//    el seguimiento, SIN correo ni aviso al ejecutivo.
+// En ambos el PDF queda obsoleto (se regenera al volver a cerrarla).
+export async function reabrirFicha(
+  fichaId: string,
+  destino: 'ejecutivo' | 'administracion',
+  nota?: string,
+): Promise<Resultado> {
   const sesion = await obtenerSesion();
   if (!sesion) return { error: 'Sesión expirada. Vuelve a entrar.' };
   if (!['admin', 'gerencia'].includes(sesion.usuario.rol))
@@ -591,10 +599,11 @@ export async function reabrirFicha(fichaId: string): Promise<Resultado> {
   if (!['lista_ejecutivo', 'completa'].includes(ficha.estado as string))
     return { error: 'Esta ficha ya está en proceso.' };
 
+  const nuevoEstado = destino === 'ejecutivo' ? 'en_proceso' : 'lista_ejecutivo';
   const { error } = await supabase
     .from('fichas_apertura')
     .update({
-      estado: 'en_proceso',
+      estado: nuevoEstado,
       reabierta_por: sesion.usuario.id,
       fecha_reapertura: new Date().toISOString(),
       pdf_url: null,
@@ -602,34 +611,42 @@ export async function reabrirFicha(fichaId: string): Promise<Resultado> {
     .eq('id', fichaId);
   if (error) return { error: 'No se pudo reabrir la ficha.' };
 
-  // Aviso al ejecutivo de que su ficha fue reabierta.
-  const cot = Array.isArray(ficha.cotizacion)
-    ? ficha.cotizacion[0]
-    : ficha.cotizacion;
-  const eje = cot
-    ? Array.isArray(cot.ejecutivo)
-      ? cot.ejecutivo[0]
-      : cot.ejecutivo
-    : null;
-  const quienReabre = sesion.usuario.nombre;
-  if (eje?.correo) {
-    after(async () => {
-      try {
-        const r = await enviarCorreoInterno({
-          para: eje.correo as string,
-          asunto: `↩ ${ficha.codigo} reabierta · ${ficha.cliente_nombre ?? ''}`,
-          html: plantillaCorreo(
-            'Tu ficha de apertura fue reabierta',
-            `<p style="font-size:13px;">Hola ${escaparHtml((eje.nombre as string)?.split(' ')[0] ?? '')},</p>
-             <p style="font-size:13px;">${escaparHtml(quienReabre)} reabrió la ficha <b>${escaparHtml(ficha.codigo as string)}</b> (${escaparHtml((ficha.cliente_nombre as string) ?? '—')}). Actualiza lo necesario y vuelve a marcar tu parte como lista.</p>
-             <p style="margin:14px 0 0;"><a href="${urlSistema()}/fichas/${fichaId}" style="display:inline-block;background:#0E7C66;color:#fff;text-decoration:none;font-size:13px;font-weight:bold;padding:9px 16px;border-radius:8px;">Abrir la ficha →</a></p>`,
-          ),
-        });
-        console.log(`[correo] ficha reabierta ${ficha.codigo} a ejecutivo → ${r.detalle}`);
-      } catch (e) {
-        console.error('[correo] aviso de reapertura falló:', e);
-      }
-    });
+  // Solo se avisa al ejecutivo si la reapertura es para él.
+  if (destino === 'ejecutivo') {
+    const cot = Array.isArray(ficha.cotizacion)
+      ? ficha.cotizacion[0]
+      : ficha.cotizacion;
+    const eje = cot
+      ? Array.isArray(cot.ejecutivo)
+        ? cot.ejecutivo[0]
+        : cot.ejecutivo
+      : null;
+    const quienReabre = sesion.usuario.nombre;
+    const notaLimpia = (nota ?? '').trim();
+    if (eje?.correo) {
+      after(async () => {
+        try {
+          const r = await enviarCorreoInterno({
+            para: eje.correo as string,
+            asunto: `↩ ${ficha.codigo} reabierta · ${ficha.cliente_nombre ?? ''}`,
+            html: plantillaCorreo(
+              'Tu ficha de apertura fue reabierta',
+              `<p style="font-size:13px;">Hola ${escaparHtml((eje.nombre as string)?.split(' ')[0] ?? '')},</p>
+               <p style="font-size:13px;">${escaparHtml(quienReabre)} reabrió la ficha <b>${escaparHtml(ficha.codigo as string)}</b> (${escaparHtml((ficha.cliente_nombre as string) ?? '—')}). Actualiza lo necesario y vuelve a marcar tu parte como lista.</p>
+               ${
+                 notaLimpia
+                   ? `<p style="font-size:13px;background:#F6ECD2;color:#8A6414;padding:12px 16px;border-radius:8px;"><b>Mensaje:</b><br/>${escaparHtml(notaLimpia).replace(/\n/g, '<br/>')}</p>`
+                   : ''
+               }
+               <p style="margin:14px 0 0;"><a href="${urlSistema()}/fichas/${fichaId}" style="display:inline-block;background:#0E7C66;color:#fff;text-decoration:none;font-size:13px;font-weight:bold;padding:9px 16px;border-radius:8px;">Abrir la ficha →</a></p>`,
+            ),
+          });
+          console.log(`[correo] ficha reabierta ${ficha.codigo} a ejecutivo → ${r.detalle}`);
+        } catch (e) {
+          console.error('[correo] aviso de reapertura falló:', e);
+        }
+      });
+    }
   }
 
   revalidatePath(`/fichas/${fichaId}`);
