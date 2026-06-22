@@ -37,6 +37,9 @@ insert into proveedores (nombre_comercial, razon_social, ruc, tipo) values
 -- ── Banco de códigos: COT-2026-0001 … COT-2026-0050 ─────────────────────────
 select generar_codigos(2026, 50);
 
+-- ── Banco de códigos ODA: ODA-2026-1001 … ODA-2026-1050 (Fase 3) ────────────
+select generar_codigos_oda(2026, 1001, 1050);
+
 -- ── Cotizaciones de ejemplo ─────────────────────────────────────────────────
 do $$
 declare
