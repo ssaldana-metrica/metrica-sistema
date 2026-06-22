@@ -23,8 +23,7 @@ export type DatosPdfOda = {
     cuentaCci: string;
     email: string;
   };
-  descripcion: string;
-  monto: number;
+  detalles: { descripcion: string; monto: number }[];
   moneda: Moneda;
   condicionesPago: string;
 };
@@ -63,6 +62,22 @@ const s = StyleSheet.create({
   datoK: { fontSize: 7.5, color: GRIS, textTransform: 'uppercase', letterSpacing: 0.5 },
   datoV: { fontSize: 9.5, marginTop: 1.5 },
   parrafo: { fontSize: 9.5, marginBottom: 4 },
+  tabla: { borderWidth: 1, borderColor: LINEA, borderRadius: 4, marginTop: 2 },
+  filaCab: { flexDirection: 'row', backgroundColor: '#F4F3EC', borderBottomWidth: 1, borderBottomColor: LINEA },
+  fila2: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: LINEA },
+  fila2Ult: { flexDirection: 'row' },
+  cab: {
+    fontSize: 7.5,
+    fontFamily: 'Helvetica-Bold',
+    color: '#4C564F',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+  },
+  celda: { paddingVertical: 6, paddingHorizontal: 8, fontSize: 9 },
+  cDesc: { width: '75%' },
+  cMonto: { width: '25%', textAlign: 'right' },
   // Bloque "Detalle de facturación": a nombre de quién factura el proveedor.
   factNota: { fontSize: 8, color: GRIS, marginBottom: 5 },
   factTabla: { borderWidth: 1, borderColor: LINEA, borderRadius: 4 },
@@ -121,7 +136,8 @@ const fechaLarga = (iso: string | null) =>
   });
 
 function Documento({ d }: { d: DatosPdfOda }) {
-  const imp = calcularImpuestos(d.monto, d.proveedor.tipo);
+  const totalDetalles = d.detalles.reduce((a, x) => a + (x.monto || 0), 0);
+  const imp = calcularImpuestos(totalDetalles, d.proveedor.tipo);
   return (
     <Document
       title={`Orden de adquisición ${d.codigo}`}
@@ -174,8 +190,27 @@ function Documento({ d }: { d: DatosPdfOda }) {
           </View>
         </View>
 
-        <Text style={s.seccion}>Detalle</Text>
-        <Text style={s.parrafo}>{d.descripcion || '—'}</Text>
+        <Text style={s.seccion}>Detalle de la compra</Text>
+        <View style={s.tabla}>
+          <View style={s.filaCab}>
+            <Text style={[s.cab, s.cDesc]}>Descripción</Text>
+            <Text style={[s.cab, s.cMonto]}>Monto</Text>
+          </View>
+          {(d.detalles.length ? d.detalles : [{ descripcion: '—', monto: 0 }]).map(
+            (x, i, arr) => (
+              <View
+                key={i}
+                style={i === arr.length - 1 ? s.fila2Ult : s.fila2}
+                wrap={false}
+              >
+                <Text style={[s.celda, s.cDesc]}>{x.descripcion || '—'}</Text>
+                <Text style={[s.celda, s.cMonto]}>
+                  {formatearMonto(x.monto || 0, d.moneda)}
+                </Text>
+              </View>
+            ),
+          )}
+        </View>
 
         <View style={s.totales}>
           <View style={s.caja}>

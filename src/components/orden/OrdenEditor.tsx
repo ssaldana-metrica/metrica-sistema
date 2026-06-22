@@ -12,7 +12,9 @@ import {
 } from '@/actions/ordenes';
 import { BadgeEstado } from '@/components/ui/BadgeEstado';
 import { calcularImpuestos } from '@/config/impuestos';
-import { formatearMonto, type Moneda } from '@/lib/calculos';
+import { formatearMonto, redondear, type Moneda } from '@/lib/calculos';
+
+type LineaFila = { descripcion: string; monto: string };
 
 export type OrdenEditorProps = {
   ordenId: string;
@@ -33,6 +35,14 @@ export function OrdenEditor(props: OrdenEditorProps) {
   const [error, setError] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
   const [d, setD] = useState<DatosOrden>(props.inicial);
+  const [lineas, setLineas] = useState<LineaFila[]>(
+    props.inicial.detalles.length
+      ? props.inicial.detalles.map((x) => ({
+          descripcion: x.descripcion,
+          monto: x.monto ? String(x.monto) : '',
+        }))
+      : [{ descripcion: '', monto: '' }],
+  );
   const [modalAnular, setModalAnular] = useState(false);
   const [motivo, setMotivo] = useState('');
 
@@ -40,14 +50,29 @@ export function OrdenEditor(props: OrdenEditorProps) {
   const anulable = props.estado === 'borrador' || props.estado === 'emitida';
   const fijar = <K extends keyof DatosOrden>(k: K, v: DatosOrden[K]) =>
     setD((x) => ({ ...x, [k]: v }));
+  const fijarLinea = (i: number, k: keyof LineaFila, v: string) =>
+    setLineas((ls) => ls.map((l, j) => (j === i ? { ...l, [k]: v } : l)));
+  const agregarLinea = () =>
+    setLineas((ls) => [...ls, { descripcion: '', monto: '' }]);
+  const quitarLinea = (i: number) =>
+    setLineas((ls) => (ls.length === 1 ? ls : ls.filter((_, j) => j !== i)));
 
-  const imp = calcularImpuestos(d.monto, d.tipoProveedor);
+  const total = lineas.reduce((a, l) => a + (parseFloat(l.monto) || 0), 0);
+  const imp = calcularImpuestos(redondear(total), d.tipoProveedor);
+
+  const payload = (): DatosOrden => ({
+    ...d,
+    detalles: lineas.map((l) => ({
+      descripcion: l.descripcion,
+      monto: parseFloat(l.monto) || 0,
+    })),
+  });
 
   function guardar() {
     setError(null);
     setAviso(null);
     startTransition(async () => {
-      const r = await guardarOrden(props.ordenId, d);
+      const r = await guardarOrden(props.ordenId, payload());
       if ('error' in r) setError(r.error);
       else {
         setAviso('Cambios guardados.');
@@ -61,7 +86,7 @@ export function OrdenEditor(props: OrdenEditorProps) {
     setAviso(null);
     startTransition(async () => {
       // Guarda primero para emitir con los datos en pantalla.
-      const g = await guardarOrden(props.ordenId, d);
+      const g = await guardarOrden(props.ordenId, payload());
       if ('error' in g) {
         setError(g.error);
         return;
@@ -202,32 +227,21 @@ export function OrdenEditor(props: OrdenEditorProps) {
               />
             </Campo>
           </div>
+          <div className="mt-4">
+            <Campo label="Condiciones de pago">
+              <input
+                value={d.condicionesPago}
+                disabled={!editable}
+                placeholder="Ej. 50% adelanto, 50% contra entrega"
+                onChange={(e) => fijar('condicionesPago', e.target.value)}
+                className={inputCls}
+              />
+            </Campo>
+          </div>
         </Tarjeta>
 
         <Tarjeta titulo="Detalle de la compra">
-          <Campo label="Descripción">
-            <textarea
-              value={d.descripcion}
-              disabled={!editable}
-              rows={2}
-              onChange={(e) => fijar('descripcion', e.target.value)}
-              className={inputCls}
-            />
-          </Campo>
-          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Campo label="Monto">
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                value={String(d.monto)}
-                disabled={!editable}
-                onChange={(e) =>
-                  fijar('monto', parseFloat(e.target.value) || 0)
-                }
-                className={`${inputCls} text-right font-mono`}
-              />
-            </Campo>
+          <div className="mb-4 sm:w-1/2">
             <Campo label="Moneda">
               <select
                 value={d.moneda}
@@ -240,17 +254,87 @@ export function OrdenEditor(props: OrdenEditorProps) {
               </select>
             </Campo>
           </div>
-          <div className="mt-4">
-            <Campo label="Condiciones de pago">
-              <input
-                value={d.condicionesPago}
-                disabled={!editable}
-                placeholder="Ej. 50% adelanto, 50% contra entrega"
-                onChange={(e) => fijar('condicionesPago', e.target.value)}
-                className={inputCls}
-              />
-            </Campo>
+
+          <div className="space-y-2">
+            {lineas.map((l, i) => (
+              <div key={i} className="flex items-end gap-2">
+                <div className="flex-1">
+                  <span className="text-[11px] font-semibold uppercase tracking-wide text-tinta-tenue">
+                    Descripción {i + 1}
+                  </span>
+                  <input
+                    value={l.descripcion}
+                    disabled={!editable}
+                    placeholder="Ej. Producción de 3 reels"
+                    onChange={(e) =>
+                      fijarLinea(i, 'descripcion', e.target.value)
+                    }
+                    className={inputCls}
+                  />
+                </div>
+                <div className="w-40">
+                  <span className="text-[11px] font-semibold uppercase tracking-wide text-tinta-tenue">
+                    Monto
+                  </span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={l.monto}
+                    disabled={!editable}
+                    onChange={(e) => fijarLinea(i, 'monto', e.target.value)}
+                    className={`${inputCls} text-right font-mono`}
+                  />
+                </div>
+                <button
+                  onClick={() => quitarLinea(i)}
+                  disabled={!editable || lineas.length === 1}
+                  title="Quitar línea"
+                  className="mb-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-rojo transition hover:bg-rojo-fondo disabled:opacity-30"
+                >
+                  ×
+                </button>
+              </div>
+            ))}
           </div>
+
+          {editable && (
+            <button
+              onClick={agregarLinea}
+              className="mt-3 rounded-lg border border-linea bg-white px-3 py-1.5 text-[12.5px] font-semibold transition hover:bg-superficie"
+            >
+              + Detalle de compra
+            </button>
+          )}
+
+          {/* Total + impuestos */}
+          <div className="mt-5 flex justify-end">
+            <div className="w-72">
+              <div className="flex justify-between border-b border-linea-suave py-1.5 text-[13px]">
+                <span className="text-tinta-tenue">
+                  {imp.modo === 'igv' ? 'Subtotal' : 'Monto (honorarios)'}
+                </span>
+                <span className="font-mono">{formatearMonto(imp.base, d.moneda)}</span>
+              </div>
+              <div className="flex justify-between border-b border-linea-suave py-1.5 text-[13px]">
+                <span className="text-tinta-tenue">{imp.etiquetaImpuesto}</span>
+                <span className="font-mono">
+                  {imp.modo === 'retencion' ? '− ' : ''}
+                  {formatearMonto(imp.impuesto, d.moneda)}
+                </span>
+              </div>
+              <div className="mt-1 flex justify-between border-t-2 border-tinta pt-2 text-[15px] font-bold">
+                <span>{imp.etiquetaTotal}</span>
+                <span className="font-mono">{formatearMonto(imp.total, d.moneda)}</span>
+              </div>
+            </div>
+          </div>
+          <p className="mt-3 text-[11.5px] text-tinta-tenue">
+            {imp.modo === 'igv'
+              ? 'Proveedor empresa: se agrega IGV.'
+              : 'Proveedor persona natural: se retiene renta (sin IGV).'}{' '}
+            Los porcentajes están pendientes de confirmar con contabilidad.
+          </p>
         </Tarjeta>
 
         <Tarjeta titulo="Datos de pago">
@@ -281,36 +365,6 @@ export function OrdenEditor(props: OrdenEditorProps) {
               />
             </Campo>
           </div>
-        </Tarjeta>
-
-        <Tarjeta titulo="Importe">
-          <div className="flex justify-end">
-            <div className="w-72">
-              <div className="flex justify-between border-b border-linea-suave py-1.5 text-[13px]">
-                <span className="text-tinta-tenue">
-                  {imp.modo === 'igv' ? 'Subtotal' : 'Monto (honorarios)'}
-                </span>
-                <span className="font-mono">{formatearMonto(imp.base, d.moneda)}</span>
-              </div>
-              <div className="flex justify-between border-b border-linea-suave py-1.5 text-[13px]">
-                <span className="text-tinta-tenue">{imp.etiquetaImpuesto}</span>
-                <span className="font-mono">
-                  {imp.modo === 'retencion' ? '− ' : ''}
-                  {formatearMonto(imp.impuesto, d.moneda)}
-                </span>
-              </div>
-              <div className="mt-1 flex justify-between border-t-2 border-tinta pt-2 text-[15px] font-bold">
-                <span>{imp.etiquetaTotal}</span>
-                <span className="font-mono">{formatearMonto(imp.total, d.moneda)}</span>
-              </div>
-            </div>
-          </div>
-          <p className="mt-3 text-[11.5px] text-tinta-tenue">
-            {imp.modo === 'igv'
-              ? 'Proveedor empresa: se agrega IGV.'
-              : 'Proveedor persona natural: se retiene renta (sin IGV).'}{' '}
-            Los porcentajes están pendientes de confirmar con contabilidad.
-          </p>
         </Tarjeta>
 
         <div className="flex flex-wrap items-center justify-end gap-2.5">

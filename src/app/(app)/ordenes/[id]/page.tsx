@@ -31,6 +31,12 @@ export default async function PaginaOrden({
     .maybeSingle();
   if (!orden) notFound();
 
+  const { data: detalles } = await supabase
+    .from('orden_detalles')
+    .select('descripcion, monto')
+    .eq('orden_id', id)
+    .order('posicion');
+
   const ficha = uno(
     orden.ficha as {
       codigo: string;
@@ -57,13 +63,15 @@ export default async function PaginaOrden({
         nombreComercial: (orden.nombre_comercial as string) ?? '',
         ruc: (orden.ruc as string) ?? '',
         tipoProveedor: (orden.tipo_proveedor as TipoProveedor) ?? 'empresa',
-        descripcion: (orden.descripcion as string) ?? '',
-        monto: Number(orden.monto) || 0,
+        condicionesPago: (orden.condiciones_pago as string) ?? '',
         moneda: orden.moneda as Moneda,
+        detalles: (detalles ?? []).map((x) => ({
+          descripcion: (x.descripcion as string) ?? '',
+          monto: Number(x.monto) || 0,
+        })),
         banco: (orden.banco as string) ?? '',
         cuentaCci: (orden.cuenta_cci as string) ?? '',
         emailProveedor: (orden.email_proveedor as string) ?? '',
-        condicionesPago: (orden.condiciones_pago as string) ?? '',
       }}
     />
   );
