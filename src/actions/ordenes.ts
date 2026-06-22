@@ -3,8 +3,11 @@
 import { revalidatePath } from 'next/cache';
 import { obtenerSesion } from '@/lib/auth';
 import { crearClienteServidor } from '@/lib/supabase/server';
+import { crearClienteAdmin } from '@/lib/supabase/admin';
 import { uno } from '@/lib/util';
+import { generarPdfOda } from '@/lib/pdf-oda';
 import type { Moneda } from '@/lib/calculos';
+import type { TipoProveedorImp } from '@/config/impuestos';
 
 export type TipoProveedor = 'empresa' | 'persona_natural';
 
@@ -171,4 +174,85 @@ export async function guardarOrden(
   revalidatePath(`/ordenes/${id}`);
   revalidatePath('/ordenes');
   return { ok: true };
+}
+
+export type ResultadoEmitir =
+  | { ok: true; urlDescarga: string | null }
+  | { error: string };
+
+// EMITIR (solo borrador): valida lo mínimo, genera el PDF formato Métrica
+// (con IGV o retención según el tipo), lo guarda en Storage y pasa a 'emitida'.
+// El código de la cotización NUNCA se imprime en el PDF.
+export async function emitirOrden(id: string): Promise<ResultadoEmitir> {
+  const ctx = await ctxOrden(id);
+  if (!ctx.ok) return { error: ctx.error };
+  if (ctx.estado !== 'borrador')
+    return { error: 'Esta orden ya fue emitida o anulada.' };
+
+  const { data: o } = await ctx.supabase
+    .from('ordenes_adquisicion')
+    .select(
+      `codigo, razon_social, nombre_comercial, ruc, tipo_proveedor, descripcion,
+       monto, moneda, banco, cuenta_cci, email_proveedor, condiciones_pago`,
+    )
+    .eq('id', id)
+    .maybeSingle();
+  if (!o) return { error: 'No se encontró la orden.' };
+
+  const faltan: string[] = [];
+  if (!(o.razon_social as string)?.trim()) faltan.push('razón social');
+  if (!(o.ruc as string)?.trim()) faltan.push('RUC');
+  if (!(Number(o.monto) > 0)) faltan.push('monto mayor a cero');
+  if (faltan.length > 0)
+    return { error: `Antes de emitir, completa: ${faltan.join(', ')}.` };
+
+  const admin = crearClienteAdmin();
+  let pdf: Buffer;
+  try {
+    pdf = await generarPdfOda({
+      codigo: o.codigo as string,
+      fechaEmision: new Date().toISOString(),
+      proveedor: {
+        razonSocial: (o.razon_social as string) ?? '',
+        nombreComercial: (o.nombre_comercial as string) ?? '',
+        ruc: (o.ruc as string) ?? '',
+        tipo: (o.tipo_proveedor as TipoProveedorImp) ?? 'empresa',
+        banco: (o.banco as string) ?? '',
+        cuentaCci: (o.cuenta_cci as string) ?? '',
+        email: (o.email_proveedor as string) ?? '',
+      },
+      descripcion: (o.descripcion as string) ?? '',
+      monto: Number(o.monto) || 0,
+      moneda: o.moneda as Moneda,
+      condicionesPago: (o.condiciones_pago as string) ?? '',
+    });
+  } catch {
+    return { error: 'No se pudo generar el PDF de la orden.' };
+  }
+
+  const ruta = `${new Date().getFullYear()}/${o.codigo}.pdf`;
+  const { error: errSubida } = await admin.storage
+    .from('ordenes')
+    .upload(ruta, pdf, { contentType: 'application/pdf', upsert: true });
+  if (errSubida) return { error: 'No se pudo guardar el PDF en el almacén.' };
+
+  const { error: errEstado } = await ctx.supabase
+    .from('ordenes_adquisicion')
+    .update({
+      estado: 'emitida',
+      emitida_por: ctx.usuarioId,
+      fecha_emision: new Date().toISOString(),
+      pdf_url: ruta,
+    })
+    .eq('id', id)
+    .eq('estado', 'borrador'); // candado
+  if (errEstado) return { error: 'No se pudo emitir la orden.' };
+
+  const { data: firmado } = await admin.storage
+    .from('ordenes')
+    .createSignedUrl(ruta, 3600);
+
+  revalidatePath(`/ordenes/${id}`);
+  revalidatePath('/ordenes');
+  return { ok: true, urlDescarga: firmado?.signedUrl ?? null };
 }

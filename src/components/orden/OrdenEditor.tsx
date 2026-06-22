@@ -3,9 +3,15 @@
 import { useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { guardarOrden, type DatosOrden, type TipoProveedor } from '@/actions/ordenes';
+import {
+  emitirOrden,
+  guardarOrden,
+  type DatosOrden,
+  type TipoProveedor,
+} from '@/actions/ordenes';
 import { BadgeEstado } from '@/components/ui/BadgeEstado';
-import { type Moneda } from '@/lib/calculos';
+import { calcularImpuestos } from '@/config/impuestos';
+import { formatearMonto, type Moneda } from '@/lib/calculos';
 
 export type OrdenEditorProps = {
   ordenId: string;
@@ -15,6 +21,7 @@ export type OrdenEditorProps = {
   fichaCodigo: string;
   cotizacionId: string | null;
   cotizacionCodigo: string;
+  pdfHref: string | null;
   inicial: DatosOrden;
 };
 
@@ -29,6 +36,8 @@ export function OrdenEditor(props: OrdenEditorProps) {
   const fijar = <K extends keyof DatosOrden>(k: K, v: DatosOrden[K]) =>
     setD((x) => ({ ...x, [k]: v }));
 
+  const imp = calcularImpuestos(d.monto, d.tipoProveedor);
+
   function guardar() {
     setError(null);
     setAviso(null);
@@ -39,6 +48,22 @@ export function OrdenEditor(props: OrdenEditorProps) {
         setAviso('Cambios guardados.');
         router.refresh();
       }
+    });
+  }
+
+  function emitir() {
+    setError(null);
+    setAviso(null);
+    startTransition(async () => {
+      // Guarda primero para emitir con los datos en pantalla.
+      const g = await guardarOrden(props.ordenId, d);
+      if ('error' in g) {
+        setError(g.error);
+        return;
+      }
+      const r = await emitirOrden(props.ordenId);
+      if ('error' in r) setError(r.error);
+      else router.refresh();
     });
   }
 
@@ -234,17 +259,74 @@ export function OrdenEditor(props: OrdenEditorProps) {
           </div>
         </Tarjeta>
 
-        {editable && (
+        <Tarjeta titulo="Importe">
           <div className="flex justify-end">
-            <button
-              onClick={guardar}
-              disabled={guardando}
-              className="rounded-lg bg-petroleo px-4 py-2 text-[13px] font-semibold text-white transition hover:bg-petroleo-oscuro disabled:opacity-60"
-            >
-              {guardando ? 'Guardando…' : 'Guardar cambios'}
-            </button>
+            <div className="w-72">
+              <div className="flex justify-between border-b border-linea-suave py-1.5 text-[13px]">
+                <span className="text-tinta-tenue">
+                  {imp.modo === 'igv' ? 'Subtotal' : 'Monto (honorarios)'}
+                </span>
+                <span className="font-mono">{formatearMonto(imp.base, d.moneda)}</span>
+              </div>
+              <div className="flex justify-between border-b border-linea-suave py-1.5 text-[13px]">
+                <span className="text-tinta-tenue">{imp.etiquetaImpuesto}</span>
+                <span className="font-mono">
+                  {imp.modo === 'retencion' ? '− ' : ''}
+                  {formatearMonto(imp.impuesto, d.moneda)}
+                </span>
+              </div>
+              <div className="mt-1 flex justify-between border-t-2 border-tinta pt-2 text-[15px] font-bold">
+                <span>{imp.etiquetaTotal}</span>
+                <span className="font-mono">{formatearMonto(imp.total, d.moneda)}</span>
+              </div>
+            </div>
           </div>
-        )}
+          <p className="mt-3 text-[11.5px] text-tinta-tenue">
+            {imp.modo === 'igv'
+              ? 'Proveedor empresa: se agrega IGV.'
+              : 'Proveedor persona natural: se retiene renta (sin IGV).'}{' '}
+            Los porcentajes están pendientes de confirmar con contabilidad.
+          </p>
+        </Tarjeta>
+
+        <div className="flex flex-wrap items-center justify-end gap-2.5">
+          {props.pdfHref && (
+            <a
+              href={props.pdfHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 rounded-lg border border-linea bg-white px-4 py-2 text-[13px] font-semibold transition hover:bg-superficie"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-[15px] w-[15px]">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
+              </svg>
+              Descargar PDF
+            </a>
+          )}
+          {editable && (
+            <>
+              <button
+                onClick={guardar}
+                disabled={guardando}
+                className="rounded-lg border border-linea bg-white px-4 py-2 text-[13px] font-semibold transition hover:bg-superficie disabled:opacity-60"
+              >
+                {guardando ? 'Guardando…' : 'Guardar cambios'}
+              </button>
+              <button
+                onClick={emitir}
+                disabled={guardando}
+                className="flex items-center gap-2 rounded-lg bg-petroleo px-4 py-2 text-[13px] font-semibold text-white transition hover:bg-petroleo-oscuro disabled:opacity-60"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-[15px] w-[15px]">
+                  <path d="M20 6 9 17l-5-5" />
+                </svg>
+                {guardando ? 'Procesando…' : 'Emitir y generar PDF'}
+              </button>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );
