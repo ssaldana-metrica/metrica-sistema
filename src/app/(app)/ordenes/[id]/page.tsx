@@ -22,7 +22,7 @@ export default async function PaginaOrden({
     .select(
       `id, codigo, estado, ficha_id, agencia, influencer_proveedor, razon_social,
        nombre_comercial, ruc, tipo_proveedor, descripcion, monto, moneda, banco,
-       cuenta_cci, email_proveedor, condiciones_pago, pdf_url,
+       cuenta_cci, email_proveedor, condiciones_pago, pdf_url, motivo_anulacion,
        ficha:fichas_apertura!inner(
          codigo, cotizacion:cotizaciones!inner(id, codigo)
        )`,
@@ -49,6 +49,7 @@ export default async function PaginaOrden({
       cotizacionId={cot?.id ?? null}
       cotizacionCodigo={cot?.codigo ?? '—'}
       pdfHref={orden.pdf_url ? `/ordenes/${orden.id as string}/pdf` : null}
+      motivoAnulacion={(orden.motivo_anulacion as string | null) ?? null}
       inicial={{
         agencia: (orden.agencia as string) ?? '',
         influencerProveedor: (orden.influencer_proveedor as string) ?? '',

@@ -256,3 +256,48 @@ export async function emitirOrden(id: string): Promise<ResultadoEmitir> {
   revalidatePath('/ordenes');
   return { ok: true, urlDescarga: firmado?.signedUrl ?? null };
 }
+
+// ANULAR (con motivo y traza): desde borrador o emitida. El código ODA queda
+// anulado para siempre (nunca se reutiliza).
+export async function anularOrden(
+  id: string,
+  motivo: string,
+): Promise<Resultado> {
+  const ctx = await ctxOrden(id);
+  if (!ctx.ok) return { error: ctx.error };
+  if (!['borrador', 'emitida'].includes(ctx.estado))
+    return { error: 'Esta orden ya está anulada.' };
+  if (!motivo.trim()) return { error: 'Escribe el motivo de la anulación.' };
+
+  const { data: o } = await ctx.supabase
+    .from('ordenes_adquisicion')
+    .select('codigo')
+    .eq('id', id)
+    .maybeSingle();
+
+  const { error } = await ctx.supabase
+    .from('ordenes_adquisicion')
+    .update({
+      estado: 'anulada',
+      anulada_por: ctx.usuarioId,
+      motivo_anulacion: motivo.trim(),
+    })
+    .eq('id', id)
+    .in('estado', ['borrador', 'emitida']); // candado
+  if (error) return { error: 'No se pudo anular la orden.' };
+
+  // El código ODA queda anulado para siempre (el servidor lo marca; el
+  // trigger impide devolverlo a disponible). Si fallara, la orden ya quedó
+  // anulada igual.
+  if (o?.codigo) {
+    const admin = crearClienteAdmin();
+    await admin
+      .from('banco_codigos_oda')
+      .update({ estado: 'anulado' })
+      .eq('codigo', o.codigo as string);
+  }
+
+  revalidatePath(`/ordenes/${id}`);
+  revalidatePath('/ordenes');
+  return { ok: true };
+}

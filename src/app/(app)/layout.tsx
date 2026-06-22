@@ -57,6 +57,7 @@ export default async function LayoutProtegido({
           icono: 'aprobaciones',
           badge: pendientes,
         },
+        { href: '/ordenes', etiqueta: 'Órdenes (ODA)', icono: 'ordenes' },
       ],
     });
   }
