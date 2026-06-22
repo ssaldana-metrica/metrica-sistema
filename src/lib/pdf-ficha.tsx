@@ -138,6 +138,23 @@ const s = StyleSheet.create({
   },
   totalEtq: { fontSize: 8, color: GRIS, textTransform: 'uppercase', letterSpacing: 0.4 },
   totalVal: { fontSize: 10, fontFamily: 'Helvetica-Bold' },
+  resumen: {
+    marginTop: 4,
+    borderWidth: 1,
+    borderColor: TINTA,
+    borderRadius: 4,
+    backgroundColor: '#F4F3EC',
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+  },
+  resumenFila: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 2,
+  },
+  resumenEtq: { fontSize: 9, fontFamily: 'Helvetica-Bold' },
+  resumenVal: { fontSize: 10.5, fontFamily: 'Helvetica-Bold' },
   vacio: { fontSize: 7.8, color: GRIS, fontStyle: 'italic', marginTop: 4 },
   pie: {
     position: 'absolute',
@@ -318,6 +335,35 @@ function Documento({ d }: { d: DatosPdfFicha }) {
             </View>
           );
         })}
+
+        {d.proveedores.length > 0 && (
+          <View style={s.resumen} wrap={false}>
+            <View style={s.resumenFila}>
+              <Text style={s.resumenEtq}>Total de montos (proveedores)</Text>
+              <Text style={s.resumenVal}>
+                {formatearMonto(
+                  d.proveedores.reduce((a, p) => a + (p.monto || 0), 0),
+                  d.servicio.moneda,
+                )}
+              </Text>
+            </View>
+            <View style={s.resumenFila}>
+              <Text style={[s.resumenEtq, { color: GRIS }]}>
+                Total de seguimiento
+              </Text>
+              <Text style={s.resumenVal}>
+                {totalesPorMoneda(
+                  d.proveedores.flatMap((p) =>
+                    p.facturas.map((fp) => ({
+                      total: fp.total,
+                      moneda: fp.monedaTotal,
+                    })),
+                  ),
+                ).join('  +  ') || '—'}
+              </Text>
+            </View>
+          </View>
+        )}
 
         <Text style={s.pie} fixed>
           Ficha de apertura generada por el Sistema Operativo de {EMPRESA.nombre} ·
