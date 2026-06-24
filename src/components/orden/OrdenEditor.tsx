@@ -4,9 +4,9 @@ import { useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
-  anularOrden,
   emitirOrden,
   guardarOrden,
+  reabrirOrden,
   type DatosOrden,
   type TipoProveedor,
 } from '@/actions/ordenes';
@@ -53,11 +53,7 @@ export function OrdenEditor(props: OrdenEditorProps) {
         }))
       : [lineaVacia()],
   );
-  const [modalAnular, setModalAnular] = useState(false);
-  const [motivo, setMotivo] = useState('');
-
   const editable = props.estado === 'borrador';
-  const anulable = props.estado === 'borrador' || props.estado === 'emitida';
   const fijar = <K extends keyof DatosOrden>(k: K, v: DatosOrden[K]) =>
     setD((x) => ({ ...x, [k]: v }));
   const fijarLinea = (i: number, k: keyof LineaFila, v: string) =>
@@ -109,16 +105,13 @@ export function OrdenEditor(props: OrdenEditorProps) {
     });
   }
 
-  function anular() {
+  function reabrir() {
     setError(null);
+    setAviso(null);
     startTransition(async () => {
-      const r = await anularOrden(props.ordenId, motivo);
+      const r = await reabrirOrden(props.ordenId);
       if ('error' in r) setError(r.error);
-      else {
-        setModalAnular(false);
-        setMotivo('');
-        router.refresh();
-      }
+      else router.refresh();
     });
   }
 
@@ -157,8 +150,8 @@ export function OrdenEditor(props: OrdenEditorProps) {
 
       {props.estado === 'emitida' && (
         <div className="mb-5 rounded-[10px] border border-azul/30 bg-azul-fondo p-3.5 text-[12.5px] text-azul">
-          Esta orden ya fue emitida. Es solo lectura (puedes anularla si hace
-          falta).
+          Esta orden ya fue emitida. Es solo lectura; si necesitas corregir
+          algo, pulsa <b>Reabrir</b> para volver a editarla y emitirla de nuevo.
         </div>
       )}
       {props.estado === 'anulada' && (
@@ -413,13 +406,14 @@ export function OrdenEditor(props: OrdenEditorProps) {
         </Tarjeta>
 
         <div className="flex flex-wrap items-center justify-end gap-2.5">
-          {anulable && (
+          {props.estado === 'emitida' && (
             <button
-              onClick={() => setModalAnular(true)}
+              onClick={reabrir}
               disabled={guardando}
-              className="mr-auto rounded-lg border border-rojo/40 bg-white px-4 py-2 text-[13px] font-semibold text-rojo transition hover:bg-rojo-fondo disabled:opacity-60"
+              title="Vuelve la orden a borrador para corregir y volver a emitir"
+              className="mr-auto rounded-lg border border-linea bg-white px-4 py-2 text-[13px] font-semibold transition hover:bg-superficie disabled:opacity-60"
             >
-              Anular
+              {guardando ? 'Reabriendo…' : 'Reabrir'}
             </button>
           )}
           {props.pdfHref && (
@@ -460,45 +454,6 @@ export function OrdenEditor(props: OrdenEditorProps) {
           )}
         </div>
       </div>
-
-      {/* Modal: anular con motivo */}
-      {modalAnular && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-lateral/45 p-6">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-flotante">
-            <h3 className="text-[15px] font-bold">
-              Anular <span className="font-mono">{props.codigo}</span>
-            </h3>
-            <p className="mt-1 text-[12.5px] text-tinta-suave">
-              La orden quedará anulada (no se borra) y su código no se
-              reutiliza. Indica el motivo.
-            </p>
-            <textarea
-              value={motivo}
-              onChange={(e) => setMotivo(e.target.value)}
-              rows={3}
-              autoFocus
-              placeholder="Ej. El proveedor canceló el servicio."
-              className="mt-4 w-full rounded-lg border border-linea bg-white px-3 py-2.5 text-[13px] outline-none transition focus:border-petroleo"
-            />
-            <div className="mt-4 flex justify-end gap-2.5">
-              <button
-                onClick={() => setModalAnular(false)}
-                disabled={guardando}
-                className="rounded-lg border border-linea bg-white px-4 py-2 text-[13px] font-semibold transition hover:bg-superficie"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={anular}
-                disabled={guardando || !motivo.trim()}
-                className="rounded-lg bg-rojo px-4 py-2 text-[13px] font-semibold text-white transition hover:bg-rojo/90 disabled:opacity-60"
-              >
-                {guardando ? 'Anulando…' : 'Anular orden'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
