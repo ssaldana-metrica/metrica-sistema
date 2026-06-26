@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
@@ -72,17 +73,17 @@ export function Sidebar({ grupos }: { grupos: GrupoNav[] }) {
 
   return (
     <aside className="flex w-[248px] shrink-0 flex-col overflow-y-auto bg-lateral py-6">
-      <div className="mx-6 mb-5 flex items-center gap-3 border-b border-white/10 pb-7">
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-petroleo to-petroleo-oscuro text-[17px] font-bold text-white">
-          M
-        </div>
-        <div className="leading-tight">
-          <div className="text-base font-bold tracking-tight text-lateral-activo">
-            Métrica
-          </div>
-          <div className="mt-px text-[10.5px] tracking-wide text-lateral-texto">
-            Sistema Operativo
-          </div>
+      <div className="mx-6 mb-5 border-b border-white/10 pb-6">
+        <Image
+          src="/marca/logo-metrica-blanco.png"
+          alt="Métrica"
+          width={734}
+          height={372}
+          priority
+          className="h-7 w-auto"
+        />
+        <div className="mt-2 text-[10.5px] tracking-wide text-lateral-texto">
+          Sistema Operativo
         </div>
       </div>
 

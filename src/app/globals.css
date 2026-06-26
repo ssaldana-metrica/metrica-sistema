@@ -1,42 +1,44 @@
 @import "tailwindcss";
 
-/* Paleta Métrica — tomada del prototipo aprobado */
+/* Paleta Métrica — derivada del logo oficial. Color de marca real: #001830
+   (azul marino del logotipo). Neutros fríos y estados armonizados. */
 @theme {
-  --color-crema: #EEEDE6;
-  --color-superficie: #F8F7F2;
-  --color-tinta: #16201C;
-  --color-tinta-suave: #4C564F;
-  --color-tinta-tenue: #828B83;
+  --color-crema: #F2F4F7;       /* fondo de la app (off-white frío) */
+  --color-superficie: #ECF0F4;  /* encabezados de tabla, hover, deshabilitado */
+  --color-tinta: #001830;       /* texto principal = navy de marca */
+  --color-tinta-suave: #3E4D63;
+  --color-tinta-tenue: #7C8898;
 
-  --color-petroleo: #0E7C66;
-  --color-petroleo-oscuro: #0A5C4C;
-  --color-terracota: #C2683A;
+  /* Primario de marca (se conservan los nombres de token para no romper nada) */
+  --color-petroleo: #001830;        /* navy Métrica (botones/enlaces/activo) */
+  --color-petroleo-oscuro: #0C2A49; /* hover */
+  --color-terracota: #C2683A;       /* acento cálido secundario */
   --color-terracota-oscuro: #A8552C;
 
-  --color-lateral: #14201C;
-  --color-lateral-claro: #1B2A25;
-  --color-lateral-texto: #A8B5AE;
-  --color-lateral-activo: #E8E5DB;
+  --color-lateral: #001830;        /* sidebar = navy de marca */
+  --color-lateral-claro: #0E2A47;  /* hover/activo del sidebar */
+  --color-lateral-texto: #8B99AD;
+  --color-lateral-activo: #FFFFFF;
 
-  --color-verde: #2E7D55;
-  --color-verde-fondo: #E2F0E6;
-  --color-ambar: #B5821E;
+  --color-verde: #1F7A52;
+  --color-verde-fondo: #E3F0E8;
+  --color-ambar: #9A6A12;
   --color-ambar-fondo: #F6ECD2;
-  --color-rojo: #B24A3C;
-  --color-rojo-fondo: #F3E1DD;
-  --color-azul: #3A6B9E;
-  --color-azul-fondo: #E0E9F2;
-  --color-pizarra: #6B7A72;
-  --color-pizarra-fondo: #E6E9E6;
+  --color-rojo: #B23A2C;
+  --color-rojo-fondo: #F4E2DD;
+  --color-azul: #2E6FB0;
+  --color-azul-fondo: #E2EAF3;
+  --color-pizarra: #5E6B7C;
+  --color-pizarra-fondo: #E9ECF1;
 
-  --color-linea: rgba(20, 32, 28, 0.12);
-  --color-linea-suave: rgba(20, 32, 28, 0.06);
+  --color-linea: rgba(0, 24, 48, 0.10);
+  --color-linea-suave: rgba(0, 24, 48, 0.05);
 
   --font-sans: var(--font-hanken), system-ui, sans-serif;
   --font-mono: var(--font-plex-mono), monospace;
 
-  --shadow-tarjeta: 0 1px 2px rgba(20,32,28,0.04), 0 4px 16px rgba(20,32,28,0.06);
-  --shadow-flotante: 0 8px 40px rgba(20,32,28,0.14);
+  --shadow-tarjeta: 0 1px 2px rgba(0,24,48,0.05), 0 4px 16px rgba(0,24,48,0.07);
+  --shadow-flotante: 0 8px 40px rgba(0,24,48,0.16);
 }
 
 body {
