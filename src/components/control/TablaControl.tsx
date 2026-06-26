@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState, useTransition } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { anularProceso, guardarControlLote } from '@/actions/control';
 import { Spinner } from '@/components/ui/Spinner';
@@ -377,8 +378,14 @@ function ProcesoCeldas({
           {estilo.etiqueta}
         </span>
       </td>
-      <td className={`${celda} font-mono text-[11.5px] font-semibold text-tinta`}>
-        {p.codigoFA}
+      <td className={`${celda} font-mono text-[11.5px] font-semibold`}>
+        <Link
+          href={`/fichas/${p.fichaId}`}
+          className="text-petroleo-oscuro hover:underline"
+          title="Ver la ficha del proceso"
+        >
+          {p.codigoFA}
+        </Link>
       </td>
       <td className={`${celda} text-tinta`}>{p.cliente}</td>
       <td className={celda}>{p.politica}</td>
