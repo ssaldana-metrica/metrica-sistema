@@ -10,6 +10,7 @@ import { EMPRESA } from '@/config/empresa';
 import { formatearMonto, type Moneda } from '@/lib/calculos';
 import { calcularImpuestos, type TipoProveedorImp } from '@/config/impuestos';
 import { CLAUSULAS_ODA } from '@/config/oda';
+import { C, EncabezadoPdf, PiePdf, SelloAnulado } from '@/lib/pdf-marca';
 
 export type DatosPdfOda = {
   codigo: string;
@@ -31,116 +32,111 @@ export type DatosPdfOda = {
   }[];
   moneda: Moneda;
   condicionesPago: string;
+  anulada?: boolean;
 };
 
-const VERDE = '#0E7C66';
-const TINTA = '#16201C';
-const GRIS = '#828B83';
-const LINEA = '#E3E2DA';
-
 const s = StyleSheet.create({
-  pagina: { padding: 46, fontSize: 9.5, fontFamily: 'Helvetica', color: TINTA, lineHeight: 1.45 },
-  cabecera: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    borderBottomWidth: 2,
-    borderBottomColor: TINTA,
-    paddingBottom: 14,
-    marginBottom: 16,
+  pagina: {
+    paddingTop: 42,
+    paddingBottom: 56,
+    paddingHorizontal: 44,
+    fontSize: 9.5,
+    fontFamily: 'Helvetica',
+    color: C.tinta,
+    lineHeight: 1.45,
   },
-  logo: { fontSize: 20, fontFamily: 'Helvetica-Bold', lineHeight: 1 },
-  logoAcento: { color: VERDE },
-  sub: { fontSize: 8, color: GRIS, marginTop: 7 },
-  meta: { textAlign: 'right', fontSize: 8.5, color: '#4C564F' },
-  metaCodigo: { fontSize: 13, fontFamily: 'Helvetica-Bold', color: TINTA, marginVertical: 2 },
   seccion: {
     fontSize: 8,
     fontFamily: 'Helvetica-Bold',
-    color: VERDE,
+    color: C.navy,
     textTransform: 'uppercase',
-    letterSpacing: 0.6,
+    letterSpacing: 0.7,
     marginTop: 16,
-    marginBottom: 6,
+    marginBottom: 7,
   },
   rejilla: { flexDirection: 'row', flexWrap: 'wrap' },
-  dato: { width: '50%', marginBottom: 6, paddingRight: 10 },
-  datoK: { fontSize: 7.5, color: GRIS, textTransform: 'uppercase', letterSpacing: 0.5 },
-  datoV: { fontSize: 9.5, marginTop: 1.5 },
-  parrafo: { fontSize: 9.5, marginBottom: 4 },
-  tabla: { borderWidth: 1, borderColor: LINEA, borderRadius: 4, marginTop: 2 },
-  filaCab: { flexDirection: 'row', backgroundColor: '#F4F3EC', borderBottomWidth: 1, borderBottomColor: LINEA },
-  fila2: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: LINEA },
-  fila2Ult: { flexDirection: 'row' },
+  dato: { width: '50%', marginBottom: 7, paddingRight: 12 },
+  datoK: { fontSize: 7.5, color: C.gris, textTransform: 'uppercase', letterSpacing: 0.5 },
+  datoV: { fontSize: 9.5, color: C.navy, marginTop: 2, fontFamily: 'Helvetica-Bold' },
+  parrafo: { fontSize: 9.5, marginBottom: 4, color: C.tinta },
+  mono: { fontFamily: 'Courier' },
+  tabla: { borderWidth: 1, borderColor: C.linea, borderRadius: 5, overflow: 'hidden' },
+  filaCab: { flexDirection: 'row', backgroundColor: C.fondoCab },
+  fila: { flexDirection: 'row', borderTopWidth: 1, borderTopColor: C.linea },
   cab: {
     fontSize: 7.5,
     fontFamily: 'Helvetica-Bold',
-    color: '#4C564F',
+    color: '#FFFFFF',
     textTransform: 'uppercase',
     letterSpacing: 0.4,
-    paddingVertical: 6,
+    paddingVertical: 7,
     paddingHorizontal: 8,
   },
-  celda: { paddingVertical: 6, paddingHorizontal: 8, fontSize: 8.5 },
-  cNro: { width: '7%', textAlign: 'center' },
+  celda: { paddingVertical: 7, paddingHorizontal: 8, fontSize: 8.5 },
+  cNro: { width: '7%', textAlign: 'center', color: C.grisClaro },
   cDesc: { width: '45%' },
-  cCant: { width: '12%', textAlign: 'right' },
-  cUnit: { width: '18%', textAlign: 'right' },
-  cMonto: { width: '18%', textAlign: 'right' },
-  clausTitulo: {
-    fontSize: 8.5,
-    fontFamily: 'Helvetica-Bold',
-    color: TINTA,
-    marginTop: 6,
-    marginBottom: 2,
-  },
-  // Bloque "Detalle de facturación": a nombre de quién factura el proveedor.
-  factNota: { fontSize: 8, color: GRIS, marginBottom: 5 },
-  factTabla: { borderWidth: 1, borderColor: LINEA, borderRadius: 4 },
-  factFila: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: LINEA },
-  factFilaUlt: { flexDirection: 'row' },
+  cCant: { width: '12%', textAlign: 'right', fontFamily: 'Courier' },
+  cUnit: { width: '18%', textAlign: 'right', fontFamily: 'Courier' },
+  cMonto: { width: '18%', textAlign: 'right', fontFamily: 'Courier' },
+  // Detalle de facturación (a nombre de quién factura el proveedor)
+  factNota: { fontSize: 8, color: C.gris, marginBottom: 5 },
+  factTabla: { borderWidth: 1, borderColor: C.linea, borderRadius: 5, overflow: 'hidden' },
+  factFila: { flexDirection: 'row', borderTopWidth: 1, borderTopColor: C.linea },
   factK: {
     width: '24%',
-    backgroundColor: '#F4F3EC',
-    paddingVertical: 6,
+    backgroundColor: C.fondoTotal,
+    paddingVertical: 7,
     paddingHorizontal: 8,
     fontSize: 8,
     fontFamily: 'Helvetica-Bold',
-    color: '#4C564F',
+    color: C.navy,
   },
-  factV: { width: '76%', paddingVertical: 6, paddingHorizontal: 8, fontSize: 9.5 },
-  totales: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 6 },
-  caja: { width: 240 },
-  fila: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 3.5 },
+  factV: {
+    width: '76%',
+    paddingVertical: 7,
+    paddingHorizontal: 8,
+    fontSize: 9.5,
+    fontFamily: 'Helvetica-Bold',
+    color: C.navy,
+  },
+  // Totales
+  totales: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 12 },
+  caja: { width: 250 },
+  filaTot: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 4,
+    paddingHorizontal: 4,
+  },
+  totK: { fontSize: 9, color: C.gris },
+  totV: { fontSize: 9, fontFamily: 'Courier', color: C.tinta },
   granTotal: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    borderTopWidth: 2,
-    borderTopColor: TINTA,
-    marginTop: 4,
-    paddingTop: 7,
-    fontSize: 12,
-    fontFamily: 'Helvetica-Bold',
+    backgroundColor: C.fondoTotal,
+    borderRadius: 5,
+    paddingVertical: 9,
+    paddingHorizontal: 10,
+    marginTop: 5,
   },
+  gtK: { fontSize: 12, fontFamily: 'Helvetica-Bold', color: C.navy },
+  gtV: { fontSize: 13, fontFamily: 'Courier', color: C.navy },
   nota: {
-    marginTop: 8,
-    backgroundColor: '#F6ECD2',
-    color: '#8A6414',
+    marginTop: 10,
+    backgroundColor: C.ambarFondo,
+    color: C.ambarTexto,
     fontSize: 8.5,
-    padding: 8,
+    padding: 9,
     borderRadius: 4,
   },
-  clausula: { fontSize: 8.5, color: '#4C564F', marginBottom: 4, lineHeight: 1.5 },
-  pie: {
-    position: 'absolute',
-    bottom: 26,
-    left: 46,
-    right: 46,
-    borderTopWidth: 1,
-    borderTopColor: LINEA,
-    paddingTop: 8,
-    fontSize: 7.5,
-    color: GRIS,
+  clausTitulo: {
+    fontSize: 8.5,
+    fontFamily: 'Helvetica-Bold',
+    color: C.navy,
+    marginTop: 7,
+    marginBottom: 2,
   },
+  clausula: { fontSize: 8.5, color: C.navySuave, marginBottom: 4, lineHeight: 1.5 },
 });
 
 const fechaLarga = (iso: string | null) =>
@@ -160,21 +156,12 @@ function Documento({ d }: { d: DatosPdfOda }) {
       creator="Métrica · Sistema Operativo"
     >
       <Page size="A4" style={s.pagina}>
-        <View style={s.cabecera}>
-          <View>
-            <Text style={s.logo}>
-              Métri<Text style={s.logoAcento}>ca</Text>
-            </Text>
-            <Text style={s.sub}>
-              {EMPRESA.razonSocial} · RUC {EMPRESA.ruc}
-            </Text>
-          </View>
-          <View style={s.meta}>
-            <Text>ORDEN DE ADQUISICIÓN</Text>
-            <Text style={s.metaCodigo}>{d.codigo}</Text>
-            <Text>{fechaLarga(d.fechaEmision)}</Text>
-          </View>
-        </View>
+        {d.anulada && <SelloAnulado />}
+        <EncabezadoPdf
+          tipo="ORDEN DE ADQUISICIÓN"
+          codigo={d.codigo}
+          fecha={fechaLarga(d.fechaEmision)}
+        />
 
         <Text style={s.seccion}>Proveedor</Text>
         <View style={s.rejilla}>
@@ -195,11 +182,11 @@ function Documento({ d }: { d: DatosPdfOda }) {
           El proveedor debe emitir su comprobante a nombre de:
         </Text>
         <View style={s.factTabla}>
-          <View style={s.factFila}>
+          <View style={{ flexDirection: 'row' }}>
             <Text style={s.factK}>Razón social</Text>
             <Text style={s.factV}>{EMPRESA.razonSocial}</Text>
           </View>
-          <View style={s.factFilaUlt}>
+          <View style={s.factFila}>
             <Text style={s.factK}>RUC</Text>
             <Text style={s.factV}>{EMPRESA.ruc}</Text>
           </View>
@@ -217,12 +204,8 @@ function Documento({ d }: { d: DatosPdfOda }) {
           {(d.detalles.length
             ? d.detalles
             : [{ descripcion: '—', cantidad: 0, precioUnitario: 0, total: 0 }]
-          ).map((x, i, arr) => (
-            <View
-              key={i}
-              style={i === arr.length - 1 ? s.fila2Ult : s.fila2}
-              wrap={false}
-            >
+          ).map((x, i) => (
+            <View key={i} style={s.fila} wrap={false}>
               <Text style={[s.celda, s.cNro]}>{i + 1}</Text>
               <Text style={[s.celda, s.cDesc]}>{x.descripcion || '—'}</Text>
               <Text style={[s.celda, s.cCant]}>{x.cantidad}</Text>
@@ -238,22 +221,22 @@ function Documento({ d }: { d: DatosPdfOda }) {
 
         <View style={s.totales}>
           <View style={s.caja}>
-            <View style={s.fila}>
-              <Text style={{ color: GRIS }}>
+            <View style={s.filaTot}>
+              <Text style={s.totK}>
                 {imp.modo === 'igv' ? 'Subtotal' : 'Monto (honorarios)'}
               </Text>
-              <Text>{formatearMonto(imp.base, d.moneda)}</Text>
+              <Text style={s.totV}>{formatearMonto(imp.base, d.moneda)}</Text>
             </View>
-            <View style={s.fila}>
-              <Text style={{ color: GRIS }}>{imp.etiquetaImpuesto}</Text>
-              <Text>
+            <View style={s.filaTot}>
+              <Text style={s.totK}>{imp.etiquetaImpuesto}</Text>
+              <Text style={s.totV}>
                 {imp.modo === 'retencion' ? '− ' : ''}
                 {formatearMonto(imp.impuesto, d.moneda)}
               </Text>
             </View>
             <View style={s.granTotal}>
-              <Text>{imp.etiquetaTotal}</Text>
-              <Text>{formatearMonto(imp.total, d.moneda)}</Text>
+              <Text style={s.gtK}>{imp.etiquetaTotal}</Text>
+              <Text style={s.gtV}>{formatearMonto(imp.total, d.moneda)}</Text>
             </View>
           </View>
         </View>
@@ -285,10 +268,7 @@ function Documento({ d }: { d: DatosPdfOda }) {
           </View>
         ))}
 
-        <Text style={s.pie} fixed>
-          Orden de adquisición emitida por {EMPRESA.razonSocial} · RUC{' '}
-          {EMPRESA.ruc}
-        </Text>
+        <PiePdf />
       </Page>
     </Document>
   );
