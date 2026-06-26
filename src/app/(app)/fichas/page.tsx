@@ -145,7 +145,8 @@ export default async function PaginaFichas({
 
       {filas.length > 0 ? (
         <div className="overflow-hidden rounded-xl border border-linea bg-white shadow-tarjeta">
-        <table className="w-full border-collapse">
+        <div className="overflow-x-auto">
+        <table className="w-full min-w-[640px] border-collapse">
           <thead>
             <tr className="bg-superficie text-left text-[11px] uppercase tracking-wide text-tinta-tenue">
               <th className="px-5 py-3 font-semibold">Código</th>
@@ -189,6 +190,7 @@ export default async function PaginaFichas({
             ))}
           </tbody>
         </table>
+        </div>
         </div>
       ) : (
         <EstadoVacio

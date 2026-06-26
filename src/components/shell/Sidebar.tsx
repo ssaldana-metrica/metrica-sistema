@@ -68,11 +68,17 @@ export type ItemNav = {
 
 export type GrupoNav = { titulo: string; items: ItemNav[] };
 
-export function Sidebar({ grupos }: { grupos: GrupoNav[] }) {
+export function Sidebar({
+  grupos,
+  onNavegar,
+}: {
+  grupos: GrupoNav[];
+  onNavegar?: () => void;
+}) {
   const ruta = usePathname();
 
   return (
-    <aside className="flex w-[248px] shrink-0 flex-col overflow-y-auto bg-lateral py-6">
+    <aside className="flex h-full w-[248px] shrink-0 flex-col overflow-y-auto bg-lateral py-6">
       <div className="mx-6 mb-5 border-b border-white/10 pb-6">
         <Image
           src="/marca/logo-metrica-blanco.png"
@@ -99,6 +105,7 @@ export function Sidebar({ grupos }: { grupos: GrupoNav[] }) {
               <Link
                 key={item.href}
                 href={item.href}
+                onClick={onNavegar}
                 className={`relative flex w-full items-center gap-3 rounded-lg px-2.5 py-2.5 text-[13.5px] font-medium transition ${
                   activo
                     ? 'bg-lateral-claro text-lateral-activo'

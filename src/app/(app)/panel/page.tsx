@@ -78,7 +78,8 @@ export default async function Panel() {
             + Nueva cotización
           </Link>
         </div>
-        <table className="w-full border-collapse">
+        <div className="overflow-x-auto">
+        <table className="w-full min-w-[640px] border-collapse">
           <thead>
             <tr className="bg-superficie text-left text-[11px] uppercase tracking-wide text-tinta-tenue">
               <th className="px-5 py-3 font-semibold">Código</th>
@@ -135,6 +136,7 @@ export default async function Panel() {
             )}
           </tbody>
         </table>
+        </div>
       </div>
     </div>
   );

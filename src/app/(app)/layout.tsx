@@ -2,7 +2,8 @@ import { redirect } from 'next/navigation';
 import { obtenerSesion } from '@/lib/auth';
 import { crearClienteServidor } from '@/lib/supabase/server';
 import { cerrarSesion } from '@/actions/auth';
-import { Sidebar, type GrupoNav } from '@/components/shell/Sidebar';
+import { type GrupoNav } from '@/components/shell/Sidebar';
+import { Shell } from '@/components/shell/Shell';
 import { SinScrollNumerico } from '@/components/ui/SinScrollNumerico';
 import { ToastProvider } from '@/components/ui/Toast';
 
@@ -72,46 +73,47 @@ export default async function LayoutProtegido({
 
   return (
     <ToastProvider>
-    <div className="flex h-screen">
       <SinScrollNumerico />
-      <Sidebar grupos={grupos} />
-
-      <div className="flex min-w-0 flex-1 flex-col overflow-y-auto">
-        <header className="sticky top-0 z-20 flex items-center justify-end gap-4 border-b border-linea bg-superficie px-8 py-3">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-petroleo to-petroleo-oscuro text-[13px] font-bold text-white">
-              {usuario.nombre.charAt(0).toUpperCase()}
-            </div>
-            <div className="leading-tight">
-              <div className="text-[12.5px] font-semibold">{usuario.nombre}</div>
-              <div className="font-mono text-[11px] text-tinta-tenue">
-                {usuario.correo}
+      <Shell
+        grupos={grupos}
+        encabezado={
+          <>
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-petroleo to-petroleo-oscuro text-[13px] font-bold text-white">
+                {usuario.nombre.charAt(0).toUpperCase()}
+              </div>
+              <div className="leading-tight">
+                <div className="text-[12.5px] font-semibold">
+                  {usuario.nombre}
+                </div>
+                <div className="hidden font-mono text-[11px] text-tinta-tenue sm:block">
+                  {usuario.correo}
+                </div>
               </div>
             </div>
-          </div>
-          <form action={cerrarSesion}>
-            <button
-              title="Cerrar sesión"
-              className="flex h-8 w-8 items-center justify-center rounded-lg border border-linea bg-white text-tinta-suave transition hover:bg-crema"
-            >
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                className="h-4 w-4"
+            <form action={cerrarSesion}>
+              <button
+                title="Cerrar sesión"
+                className="flex h-8 w-8 items-center justify-center rounded-lg border border-linea bg-white text-tinta-suave transition hover:bg-crema"
               >
-                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-                <polyline points="16 17 21 12 16 7" />
-                <line x1="21" y1="12" x2="9" y2="12" />
-              </svg>
-            </button>
-          </form>
-        </header>
-
-        <main className="flex-1 p-8">{children}</main>
-      </div>
-    </div>
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  className="h-4 w-4"
+                >
+                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                  <polyline points="16 17 21 12 16 7" />
+                  <line x1="21" y1="12" x2="9" y2="12" />
+                </svg>
+              </button>
+            </form>
+          </>
+        }
+      >
+        {children}
+      </Shell>
     </ToastProvider>
   );
 }
