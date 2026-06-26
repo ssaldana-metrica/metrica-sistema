@@ -47,3 +47,33 @@ export async function guardarControlLote(
   revalidatePath('/control');
   return { ok: true };
 }
+
+// ANULAR PROCESO (solo admin/gerencia, motivo obligatorio): dispara la función
+// atómica anular_proceso(), que anula EN BLOQUE la cotización, su código COT,
+// la ficha y todas las ODA del proceso con sus códigos. O se anulan todos o
+// ninguno (la función corre en una sola transacción).
+export async function anularProceso(
+  fichaId: string,
+  motivo: string,
+): Promise<Resultado> {
+  const sesion = await obtenerSesion();
+  if (!sesion) return { error: 'Sesión expirada. Vuelve a entrar.' };
+  if (!['admin', 'gerencia'].includes(sesion.usuario.rol))
+    return { error: 'Solo administración puede anular procesos.' };
+  if (!motivo.trim()) return { error: 'Escribe el motivo de la anulación.' };
+
+  const supabase = await crearClienteServidor();
+  const { error } = await supabase.rpc('anular_proceso', {
+    p_ficha_id: fichaId,
+    p_motivo: motivo.trim(),
+  });
+  if (error)
+    return { error: error.message ?? 'No se pudo anular el proceso.' };
+
+  // El estado anulado se refleja en todas las pantallas afectadas.
+  revalidatePath('/control');
+  revalidatePath('/cotizaciones');
+  revalidatePath('/fichas');
+  revalidatePath('/ordenes');
+  return { ok: true };
+}
