@@ -4,6 +4,7 @@ import { crearClienteServidor } from '@/lib/supabase/server';
 import { uno } from '@/lib/util';
 import { BadgeEstado } from '@/components/ui/BadgeEstado';
 import { BotonPdf } from '@/components/ui/BotonPdf';
+import { EstadoVacio, IconosVacio } from '@/components/ui/EstadoVacio';
 import { calcularTotales, formatearMonto, type Moneda } from '@/lib/calculos';
 
 const ESTADOS = [
@@ -149,7 +150,8 @@ export default async function PaginaCotizaciones({
         </div>
       )}
 
-      <div className="overflow-hidden rounded-xl border border-linea bg-white shadow-tarjeta">
+      {filas.length > 0 ? (
+        <div className="overflow-hidden rounded-xl border border-linea bg-white shadow-tarjeta">
         <table className="w-full border-collapse">
           <thead>
             <tr className="bg-superficie text-left text-[11px] uppercase tracking-wide text-tinta-tenue">
@@ -194,21 +196,25 @@ export default async function PaginaCotizaciones({
                 <td className="px-5 py-3 text-tinta-suave">{f.actualizada}</td>
               </tr>
             ))}
-            {filas.length === 0 && (
-              <tr>
-                <td
-                  colSpan={esAdmin ? 8 : 7}
-                  className="px-5 py-10 text-center text-[13px] text-tinta-tenue"
-                >
-                  {buscado || estado
-                    ? 'Ninguna cotización coincide con el filtro.'
-                    : 'Aún no hay cotizaciones. Toma un código del banco para empezar.'}
-                </td>
-              </tr>
-            )}
           </tbody>
         </table>
-      </div>
+        </div>
+      ) : (
+        <EstadoVacio
+          icono={buscado || estado ? IconosVacio.busqueda : IconosVacio.documento}
+          titulo={buscado || estado ? 'Sin coincidencias' : 'Aún no hay cotizaciones'}
+          descripcion={
+            buscado || estado
+              ? 'Ninguna cotización coincide con el filtro. Prueba con otros términos.'
+              : 'Toma un código del banco y crea la primera cotización.'
+          }
+          accion={
+            buscado || estado
+              ? undefined
+              : { href: '/banco', etiqueta: 'Ir al banco de códigos' }
+          }
+        />
+      )}
 
       {filas.length === MAX_FILAS && (
         <p className="mt-3 text-[12px] text-tinta-tenue">

@@ -3,6 +3,7 @@ import { exigirRol } from '@/lib/auth';
 import { crearClienteServidor } from '@/lib/supabase/server';
 import { uno } from '@/lib/util';
 import { estadoProceso, controlVacio, type EstadoProc } from '@/lib/control';
+import { EstadoVacio, IconosVacio } from '@/components/ui/EstadoVacio';
 import {
   TablaControl,
   type ProcesoVista,
@@ -167,7 +168,19 @@ export default async function PaginaControl({
         </form>
       </div>
 
-      <TablaControl procesos={visibles} />
+      {visibles.length > 0 ? (
+        <TablaControl procesos={visibles} />
+      ) : (
+        <EstadoVacio
+          icono={filtro || params.q ? IconosVacio.busqueda : IconosVacio.tabla}
+          titulo={filtro || params.q ? 'Sin coincidencias' : 'Aún no hay procesos'}
+          descripcion={
+            filtro || params.q
+              ? 'Ningún proceso coincide con el filtro. Prueba con otros términos.'
+              : 'Un proceso nace al aprobar una cotización (se crea su ficha de apertura).'
+          }
+        />
+      )}
     </div>
   );
 }

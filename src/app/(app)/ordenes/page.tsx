@@ -3,6 +3,7 @@ import { exigirRol } from '@/lib/auth';
 import { crearClienteServidor } from '@/lib/supabase/server';
 import { BadgeEstado } from '@/components/ui/BadgeEstado';
 import { BotonPdf } from '@/components/ui/BotonPdf';
+import { EstadoVacio, IconosVacio } from '@/components/ui/EstadoVacio';
 import { formatearMonto, type Moneda } from '@/lib/calculos';
 
 const ESTADOS = [
@@ -135,7 +136,8 @@ export default async function PaginaOrdenes({
         </div>
       )}
 
-      <div className="overflow-hidden rounded-xl border border-linea bg-white shadow-tarjeta">
+      {filas.length > 0 ? (
+        <div className="overflow-hidden rounded-xl border border-linea bg-white shadow-tarjeta">
         <table className="w-full border-collapse">
           <thead>
             <tr className="bg-superficie text-left text-[11px] uppercase tracking-wide text-tinta-tenue">
@@ -178,21 +180,20 @@ export default async function PaginaOrdenes({
                 <td className="px-5 py-3 text-tinta-suave">{f.actualizada}</td>
               </tr>
             ))}
-            {filas.length === 0 && (
-              <tr>
-                <td
-                  colSpan={7}
-                  className="px-5 py-10 text-center text-[13px] text-tinta-tenue"
-                >
-                  {buscado || estado
-                    ? 'Ninguna orden coincide con el filtro.'
-                    : 'Aún no hay órdenes. Se generan desde una ficha completa.'}
-                </td>
-              </tr>
-            )}
           </tbody>
         </table>
-      </div>
+        </div>
+      ) : (
+        <EstadoVacio
+          icono={buscado || estado ? IconosVacio.busqueda : IconosVacio.carrito}
+          titulo={buscado || estado ? 'Sin coincidencias' : 'Aún no hay órdenes'}
+          descripcion={
+            buscado || estado
+              ? 'Ninguna orden coincide con el filtro. Prueba con otros términos.'
+              : 'Las órdenes de adquisición se generan desde una ficha de apertura completa.'
+          }
+        />
+      )}
 
       {filas.length === MAX_FILAS && (
         <p className="mt-3 text-[12px] text-tinta-tenue">

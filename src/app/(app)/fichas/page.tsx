@@ -4,6 +4,7 @@ import { crearClienteServidor } from '@/lib/supabase/server';
 import { uno } from '@/lib/util';
 import { BadgeEstado } from '@/components/ui/BadgeEstado';
 import { BotonPdf } from '@/components/ui/BotonPdf';
+import { EstadoVacio, IconosVacio } from '@/components/ui/EstadoVacio';
 
 const ESTADOS = [
   { valor: '', etiqueta: 'Todas' },
@@ -142,7 +143,8 @@ export default async function PaginaFichas({
         </div>
       )}
 
-      <div className="overflow-hidden rounded-xl border border-linea bg-white shadow-tarjeta">
+      {filas.length > 0 ? (
+        <div className="overflow-hidden rounded-xl border border-linea bg-white shadow-tarjeta">
         <table className="w-full border-collapse">
           <thead>
             <tr className="bg-superficie text-left text-[11px] uppercase tracking-wide text-tinta-tenue">
@@ -185,21 +187,20 @@ export default async function PaginaFichas({
                 <td className="px-5 py-3 text-tinta-suave">{f.actualizada}</td>
               </tr>
             ))}
-            {filas.length === 0 && (
-              <tr>
-                <td
-                  colSpan={esAdmin ? 7 : 6}
-                  className="px-5 py-10 text-center text-[13px] text-tinta-tenue"
-                >
-                  {buscado || estado
-                    ? 'Ninguna ficha coincide con el filtro.'
-                    : 'Aún no hay fichas. Se crean al aprobar una cotización.'}
-                </td>
-              </tr>
-            )}
           </tbody>
         </table>
-      </div>
+        </div>
+      ) : (
+        <EstadoVacio
+          icono={buscado || estado ? IconosVacio.busqueda : IconosVacio.documento}
+          titulo={buscado || estado ? 'Sin coincidencias' : 'Aún no hay fichas'}
+          descripcion={
+            buscado || estado
+              ? 'Ninguna ficha coincide con el filtro. Prueba con otros términos.'
+              : 'Las fichas de apertura se crean automáticamente al aprobar una cotización.'
+          }
+        />
+      )}
 
       {filas.length === MAX_FILAS && (
         <p className="mt-3 text-[12px] text-tinta-tenue">
