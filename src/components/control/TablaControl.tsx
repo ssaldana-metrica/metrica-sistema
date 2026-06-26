@@ -3,6 +3,7 @@
 import { useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { anularProceso, guardarControlLote } from '@/actions/control';
+import { Spinner } from '@/components/ui/Spinner';
 import {
   ESTILO_PROC,
   fechaCorta,
@@ -119,11 +120,10 @@ export function TablaControl({ procesos }: { procesos: ProcesoVista[] }) {
           <button
             onClick={guardar}
             disabled={guardando}
-            className="rounded-lg bg-petroleo px-4 py-2 text-[13px] font-semibold text-white transition hover:bg-petroleo-oscuro disabled:opacity-60"
+            className="inline-flex items-center gap-2 rounded-lg bg-petroleo px-4 py-2 text-[13px] font-semibold text-white transition hover:bg-petroleo-oscuro disabled:opacity-60"
           >
-            {guardando
-              ? 'Guardando…'
-              : `Guardar cambios (${sucios.size})`}
+            {guardando && <Spinner />}
+            {guardando ? 'Guardando…' : `Guardar cambios (${sucios.size})`}
           </button>
         )}
       </div>
@@ -334,8 +334,9 @@ export function TablaControl({ procesos }: { procesos: ProcesoVista[] }) {
               <button
                 onClick={anular}
                 disabled={guardando || !motivo.trim()}
-                className="rounded-lg bg-rojo px-4 py-2 text-[13px] font-semibold text-white transition hover:bg-rojo/90 disabled:opacity-60"
+                className="inline-flex items-center gap-2 rounded-lg bg-rojo px-4 py-2 text-[13px] font-semibold text-white transition hover:bg-rojo/90 disabled:opacity-60"
               >
+                {guardando && <Spinner />}
                 {guardando ? 'Anulando…' : 'Anular proceso'}
               </button>
             </div>

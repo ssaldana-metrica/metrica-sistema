@@ -11,6 +11,7 @@ import {
   type TipoProveedor,
 } from '@/actions/ordenes';
 import { BadgeEstado } from '@/components/ui/BadgeEstado';
+import { Spinner } from '@/components/ui/Spinner';
 import { calcularImpuestos } from '@/config/impuestos';
 import { formatearMonto, redondear, type Moneda } from '@/lib/calculos';
 
@@ -101,7 +102,10 @@ export function OrdenEditor(props: OrdenEditorProps) {
       }
       const r = await emitirOrden(props.ordenId);
       if ('error' in r) setError(r.error);
-      else router.refresh();
+      else {
+        setAviso('Orden emitida · PDF generado. Ya puedes descargarlo.');
+        router.refresh();
+      }
     });
   }
 
@@ -111,7 +115,10 @@ export function OrdenEditor(props: OrdenEditorProps) {
     startTransition(async () => {
       const r = await reabrirOrden(props.ordenId);
       if ('error' in r) setError(r.error);
-      else router.refresh();
+      else {
+        setAviso('Orden reabierta. Corrige lo necesario y vuelve a emitir.');
+        router.refresh();
+      }
     });
   }
 
@@ -445,9 +452,13 @@ export function OrdenEditor(props: OrdenEditorProps) {
                 disabled={guardando}
                 className="flex items-center gap-2 rounded-lg bg-petroleo px-4 py-2 text-[13px] font-semibold text-white transition hover:bg-petroleo-oscuro disabled:opacity-60"
               >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-[15px] w-[15px]">
-                  <path d="M20 6 9 17l-5-5" />
-                </svg>
+                {guardando ? (
+                  <Spinner />
+                ) : (
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-[15px] w-[15px]">
+                    <path d="M20 6 9 17l-5-5" />
+                  </svg>
+                )}
                 {guardando ? 'Procesando…' : 'Emitir y generar PDF'}
               </button>
             </>
