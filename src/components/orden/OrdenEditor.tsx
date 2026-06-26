@@ -12,6 +12,7 @@ import {
 } from '@/actions/ordenes';
 import { BadgeEstado } from '@/components/ui/BadgeEstado';
 import { Spinner } from '@/components/ui/Spinner';
+import { useToast } from '@/components/ui/Toast';
 import { calcularImpuestos } from '@/config/impuestos';
 import { formatearMonto, redondear, type Moneda } from '@/lib/calculos';
 
@@ -41,9 +42,9 @@ export type OrdenEditorProps = {
 
 export function OrdenEditor(props: OrdenEditorProps) {
   const router = useRouter();
+  const toast = useToast();
   const [guardando, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [aviso, setAviso] = useState<string | null>(null);
   const [d, setD] = useState<DatosOrden>(props.inicial);
   const [lineas, setLineas] = useState<LineaFila[]>(
     props.inicial.detalles.length
@@ -79,12 +80,11 @@ export function OrdenEditor(props: OrdenEditorProps) {
 
   function guardar() {
     setError(null);
-    setAviso(null);
     startTransition(async () => {
       const r = await guardarOrden(props.ordenId, payload());
       if ('error' in r) setError(r.error);
       else {
-        setAviso('Cambios guardados.');
+        toast({ texto: 'Cambios guardados.' });
         router.refresh();
       }
     });
@@ -92,7 +92,6 @@ export function OrdenEditor(props: OrdenEditorProps) {
 
   function emitir() {
     setError(null);
-    setAviso(null);
     startTransition(async () => {
       // Guarda primero para emitir con los datos en pantalla.
       const g = await guardarOrden(props.ordenId, payload());
@@ -103,7 +102,7 @@ export function OrdenEditor(props: OrdenEditorProps) {
       const r = await emitirOrden(props.ordenId);
       if ('error' in r) setError(r.error);
       else {
-        setAviso('Orden emitida · PDF generado. Ya puedes descargarlo.');
+        toast({ texto: 'Orden emitida · PDF generado. Ya puedes descargarlo.' });
         router.refresh();
       }
     });
@@ -111,12 +110,11 @@ export function OrdenEditor(props: OrdenEditorProps) {
 
   function reabrir() {
     setError(null);
-    setAviso(null);
     startTransition(async () => {
       const r = await reabrirOrden(props.ordenId);
       if ('error' in r) setError(r.error);
       else {
-        setAviso('Orden reabierta. Corrige lo necesario y vuelve a emitir.');
+        toast({ texto: 'Orden reabierta. Corrige lo necesario y vuelve a emitir.' });
         router.refresh();
       }
     });
@@ -172,11 +170,6 @@ export function OrdenEditor(props: OrdenEditorProps) {
       {error && (
         <div className="mb-4 rounded-[10px] border border-rojo/30 bg-rojo-fondo px-4 py-3 text-[13px] text-rojo">
           {error}
-        </div>
-      )}
-      {aviso && (
-        <div className="mb-4 rounded-[10px] border border-verde/30 bg-verde-fondo px-4 py-3 text-[13px] text-verde">
-          {aviso}
         </div>
       )}
 

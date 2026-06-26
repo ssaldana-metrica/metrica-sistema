@@ -15,6 +15,7 @@ import {
 import { generarOda } from '@/actions/ordenes';
 import { BadgeEstado } from '@/components/ui/BadgeEstado';
 import { Spinner } from '@/components/ui/Spinner';
+import { useToast } from '@/components/ui/Toast';
 import { formatearMonto, redondear, type Moneda } from '@/lib/calculos';
 
 const numOnull = (v: string) => (v.trim() ? parseFloat(v) || 0 : null);
@@ -109,10 +110,10 @@ export type FichaEditorProps = {
 
 export function FichaEditor(props: FichaEditorProps) {
   const router = useRouter();
+  const toast = useToast();
   const [pestana, setPestana] = useState<'ejecutivo' | 'admin'>('ejecutivo');
   const [guardando, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [aviso, setAviso] = useState<string | null>(null);
   const [modalReabrir, setModalReabrir] = useState(false);
   const [notaReapertura, setNotaReapertura] = useState('');
 
@@ -178,12 +179,11 @@ export function FichaEditor(props: FichaEditorProps) {
 
   function guardar() {
     setError(null);
-    setAviso(null);
     startTransition(async () => {
       const r = await guardarFichaEjecutivo(props.fichaId, datos, aEntrada());
       if ('error' in r) setError(r.error);
       else {
-        setAviso('Avance guardado.');
+        toast({ texto: 'Avance guardado.' });
         router.refresh();
       }
     });
@@ -191,11 +191,13 @@ export function FichaEditor(props: FichaEditorProps) {
 
   function marcarLista() {
     setError(null);
-    setAviso(null);
     startTransition(async () => {
       const r = await marcarListaEjecutivo(props.fichaId, datos, aEntrada());
       if ('error' in r) setError(r.error);
-      else router.refresh();
+      else {
+        toast({ texto: 'Tu parte quedó lista. Administración hará el seguimiento.' });
+        router.refresh();
+      }
     });
   }
 
@@ -270,7 +272,6 @@ export function FichaEditor(props: FichaEditorProps) {
 
   function guardarSeguimiento() {
     setError(null);
-    setAviso(null);
     startTransition(async () => {
       const r = await guardarSeguimientoAdmin(
         props.fichaId,
@@ -279,7 +280,7 @@ export function FichaEditor(props: FichaEditorProps) {
       );
       if ('error' in r) setError(r.error);
       else {
-        setAviso('Seguimiento guardado.');
+        toast({ texto: 'Seguimiento guardado.' });
         router.refresh();
       }
     });
@@ -287,7 +288,6 @@ export function FichaEditor(props: FichaEditorProps) {
 
   function cerrar() {
     setError(null);
-    setAviso(null);
     startTransition(async () => {
       const r = await cerrarFicha(
         props.fichaId,
@@ -295,41 +295,48 @@ export function FichaEditor(props: FichaEditorProps) {
         segProvsPayload(),
       );
       if ('error' in r) setError(r.error);
-      else router.refresh();
+      else {
+        toast({ texto: 'Ficha cerrada · PDF generado. Ya puedes descargarlo.' });
+        router.refresh();
+      }
+    });
+  }
+
+  function generarOrden(provId: string) {
+    setError(null);
+    startTransition(async () => {
+      const r = await generarOda(provId);
+      if ('error' in r) setError(r.error);
+      else {
+        toast({ texto: 'Orden de adquisición generada.' });
+        router.push(`/ordenes/${r.id}`);
+      }
     });
   }
 
   // Reapertura para administración: sin correo ni aviso al ejecutivo.
-  function generarOrden(provId: string) {
-    setError(null);
-    setAviso(null);
-    startTransition(async () => {
-      const r = await generarOda(provId);
-      if ('error' in r) setError(r.error);
-      else router.push(`/ordenes/${r.id}`);
-    });
-  }
-
   function reabrirAdmin() {
     setError(null);
-    setAviso(null);
     startTransition(async () => {
       const r = await reabrirFicha(props.fichaId, 'administracion');
       if ('error' in r) setError(r.error);
-      else router.refresh();
+      else {
+        toast({ texto: 'Ficha reabierta para corregir el seguimiento.' });
+        router.refresh();
+      }
     });
   }
 
   // Reapertura para el ejecutivo: con nota opcional, se le avisa por correo.
   function reabrirEjecutivo() {
     setError(null);
-    setAviso(null);
     startTransition(async () => {
       const r = await reabrirFicha(props.fichaId, 'ejecutivo', notaReapertura);
       if ('error' in r) setError(r.error);
       else {
         setModalReabrir(false);
         setNotaReapertura('');
+        toast({ texto: 'Ficha reabierta · se avisó al ejecutivo por correo.' });
         router.refresh();
       }
     });
@@ -409,11 +416,6 @@ export function FichaEditor(props: FichaEditorProps) {
       {error && (
         <div className="mb-4 rounded-[10px] border border-rojo/30 bg-rojo-fondo px-4 py-3 text-[13px] text-rojo">
           {error}
-        </div>
-      )}
-      {aviso && (
-        <div className="mb-4 rounded-[10px] border border-verde/30 bg-verde-fondo px-4 py-3 text-[13px] text-verde">
-          {aviso}
         </div>
       )}
 

@@ -4,6 +4,7 @@ import { useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { anularProceso, guardarControlLote } from '@/actions/control';
 import { Spinner } from '@/components/ui/Spinner';
+import { useToast } from '@/components/ui/Toast';
 import {
   ESTILO_PROC,
   fechaCorta,
@@ -39,9 +40,9 @@ const inp =
 
 export function TablaControl({ procesos }: { procesos: ProcesoVista[] }) {
   const router = useRouter();
+  const toast = useToast();
   const [guardando, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [aviso, setAviso] = useState<string | null>(null);
 
   const fichaDe = useMemo(() => {
     const m = new Map<string, string>();
@@ -72,7 +73,6 @@ export function TablaControl({ procesos }: { procesos: ProcesoVista[] }) {
 
   function guardar() {
     setError(null);
-    setAviso(null);
     const cambios = [...sucios]
       .filter((id) => valores[id] && fichaDe.has(id))
       .map((id) => ({
@@ -85,7 +85,7 @@ export function TablaControl({ procesos }: { procesos: ProcesoVista[] }) {
       if ('error' in r) setError(r.error);
       else {
         setSucios(new Set());
-        setAviso('Cambios guardados.');
+        toast({ texto: 'Cambios guardados.' });
         router.refresh();
       }
     });
@@ -94,12 +94,17 @@ export function TablaControl({ procesos }: { procesos: ProcesoVista[] }) {
   function anular() {
     if (!anularDe) return;
     setError(null);
+    const codigo = anularDe.codigo;
     startTransition(async () => {
       const r = await anularProceso(anularDe.fichaId, motivo);
       if ('error' in r) setError(r.error);
       else {
         setAnularDe(null);
         setMotivo('');
+        toast({
+          tipo: 'info',
+          texto: `Proceso ${codigo} anulado: cotización, ficha y ODA.`,
+        });
         router.refresh();
       }
     });
@@ -112,9 +117,6 @@ export function TablaControl({ procesos }: { procesos: ProcesoVista[] }) {
           <span className="rounded-md border border-rojo/30 bg-rojo-fondo px-3 py-1.5 text-[12.5px] text-rojo">
             {error}
           </span>
-        )}
-        {aviso && sucios.size === 0 && (
-          <span className="text-[12.5px] text-verde">{aviso}</span>
         )}
         {sucios.size > 0 && (
           <button

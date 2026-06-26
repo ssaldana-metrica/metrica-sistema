@@ -4,6 +4,7 @@ import { crearClienteServidor } from '@/lib/supabase/server';
 import { cerrarSesion } from '@/actions/auth';
 import { Sidebar, type GrupoNav } from '@/components/shell/Sidebar';
 import { SinScrollNumerico } from '@/components/ui/SinScrollNumerico';
+import { ToastProvider } from '@/components/ui/Toast';
 
 // Candado de la zona protegida: sin sesión válida no se ve nada.
 // Cubre también al usuario dado de baja A MITAD de sesión: su login de
@@ -70,6 +71,7 @@ export default async function LayoutProtegido({
   }
 
   return (
+    <ToastProvider>
     <div className="flex h-screen">
       <SinScrollNumerico />
       <Sidebar grupos={grupos} />
@@ -110,5 +112,6 @@ export default async function LayoutProtegido({
         <main className="flex-1 p-8">{children}</main>
       </div>
     </div>
+    </ToastProvider>
   );
 }
