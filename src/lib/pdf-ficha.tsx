@@ -8,6 +8,7 @@ import {
 } from '@react-pdf/renderer';
 import { EMPRESA } from '@/config/empresa';
 import { formatearMonto, type Moneda } from '@/lib/calculos';
+import { C, EncabezadoPdf, PiePdf, SelloAnulado } from '@/lib/pdf-marca';
 
 export type FacturaClientePdf = {
   numFactura: string;
@@ -62,111 +63,89 @@ export type DatosPdfFicha = {
     cuentaCci: string;
     facturas: FacturaProveedorPdf[];
   }[];
+  anulada?: boolean;
 };
 
-const VERDE = '#0E7C66';
-const TINTA = '#16201C';
-const GRIS = '#828B83';
-const LINEA = '#E3E2DA';
-
 const s = StyleSheet.create({
-  pagina: { padding: 42, fontSize: 9, fontFamily: 'Helvetica', color: TINTA, lineHeight: 1.4 },
-  cabecera: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    borderBottomWidth: 2,
-    borderBottomColor: TINTA,
-    paddingBottom: 12,
-    marginBottom: 14,
+  pagina: {
+    paddingTop: 42,
+    paddingBottom: 56,
+    paddingHorizontal: 44,
+    fontSize: 9,
+    fontFamily: 'Helvetica',
+    color: C.tinta,
+    lineHeight: 1.4,
   },
-  logo: { fontSize: 19, fontFamily: 'Helvetica-Bold', lineHeight: 1 },
-  logoAcento: { color: VERDE },
-  sub: { fontSize: 7.5, color: GRIS, marginTop: 6 },
-  meta: { textAlign: 'right', fontSize: 8, color: '#4C564F' },
-  metaCodigo: { fontSize: 12, fontFamily: 'Helvetica-Bold', color: TINTA, marginVertical: 2 },
   seccion: {
     fontSize: 8,
     fontFamily: 'Helvetica-Bold',
-    color: VERDE,
+    color: C.navy,
     textTransform: 'uppercase',
-    letterSpacing: 0.6,
-    marginTop: 14,
-    marginBottom: 6,
+    letterSpacing: 0.7,
+    marginTop: 16,
+    marginBottom: 7,
   },
   rejilla: { flexDirection: 'row', flexWrap: 'wrap' },
-  dato: { width: '50%', marginBottom: 6, paddingRight: 10 },
-  datoK: { fontSize: 7, color: GRIS, textTransform: 'uppercase', letterSpacing: 0.4 },
-  datoV: { fontSize: 9, marginTop: 1.5 },
-  tabla: { borderWidth: 1, borderColor: LINEA, borderRadius: 4, marginTop: 2 },
-  filaCab: { flexDirection: 'row', backgroundColor: '#F4F3EC', borderBottomWidth: 1, borderBottomColor: LINEA },
-  fila: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: LINEA },
-  filaUltima: { flexDirection: 'row' },
+  dato: { width: '50%', marginBottom: 7, paddingRight: 12 },
+  datoK: { fontSize: 7, color: C.gris, textTransform: 'uppercase', letterSpacing: 0.4 },
+  datoV: { fontSize: 9.5, color: C.navy, marginTop: 2, fontFamily: 'Helvetica-Bold' },
+  mono: { fontFamily: 'Courier' },
+  tabla: { borderWidth: 1, borderColor: C.linea, borderRadius: 4, overflow: 'hidden' },
+  filaCab: { flexDirection: 'row', backgroundColor: C.fondoCab },
+  fila: { flexDirection: 'row', borderTopWidth: 1, borderTopColor: C.linea },
   cab: {
     fontSize: 6.8,
     fontFamily: 'Helvetica-Bold',
-    color: '#4C564F',
+    color: '#FFFFFF',
     textTransform: 'uppercase',
     letterSpacing: 0.3,
-    paddingVertical: 5,
-    paddingHorizontal: 5,
+    paddingVertical: 6,
+    paddingHorizontal: 6,
   },
-  celda: { paddingVertical: 5, paddingHorizontal: 5, fontSize: 7.8 },
-  // Tabla de facturas del cliente
-  fcFact: { width: '24%' },
+  celda: { paddingVertical: 6, paddingHorizontal: 6, fontSize: 8 },
+  // Facturas del cliente
+  fcFact: { width: '24%', fontFamily: 'Helvetica-Bold' },
   fcOc: { width: '20%' },
   fcHes: { width: '18%' },
   fcFecha: { width: '20%' },
-  fcTotal: { width: '18%', textAlign: 'right' },
+  fcTotal: { width: '18%', textAlign: 'right', fontFamily: 'Courier' },
   // Proveedor
-  provBloque: { borderWidth: 1, borderColor: LINEA, borderRadius: 4, marginBottom: 8, padding: 8 },
-  provNombre: { fontSize: 9.5, fontFamily: 'Helvetica-Bold' },
-  provMeta: { fontSize: 7.6, color: GRIS, marginTop: 2 },
-  provMonto: { fontSize: 9, fontFamily: 'Helvetica-Bold', textAlign: 'right' },
-  // Sub-tabla de facturas del proveedor
-  pfOc: { width: '26%' },
+  provBloque: { borderWidth: 1, borderColor: C.linea, borderRadius: 5, marginBottom: 9, padding: 10 },
+  provNombre: { fontSize: 9.5, fontFamily: 'Helvetica-Bold', color: C.navy },
+  provMeta: { fontSize: 7.6, color: C.gris, marginTop: 2 },
+  provMonto: { fontSize: 10, fontFamily: 'Courier', textAlign: 'right', color: C.navy },
+  pfOc: { width: '26%', fontFamily: 'Helvetica-Bold' },
   pfFact: { width: '28%' },
   pfFecha: { width: '24%' },
-  pfTotal: { width: '22%', textAlign: 'right' },
+  pfTotal: { width: '22%', textAlign: 'right', fontFamily: 'Courier' },
   totalFila: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
     gap: 10,
-    marginTop: 6,
+    marginTop: 7,
     paddingTop: 6,
     borderTopWidth: 1,
-    borderTopColor: LINEA,
+    borderTopColor: C.linea,
+    alignItems: 'center',
   },
-  totalEtq: { fontSize: 8, color: GRIS, textTransform: 'uppercase', letterSpacing: 0.4 },
-  totalVal: { fontSize: 10, fontFamily: 'Helvetica-Bold' },
+  totalEtq: { fontSize: 8, color: C.gris, textTransform: 'uppercase', letterSpacing: 0.4 },
+  totalVal: { fontSize: 10, fontFamily: 'Courier', color: C.navy },
   resumen: {
-    marginTop: 4,
-    borderWidth: 1,
-    borderColor: TINTA,
-    borderRadius: 4,
-    backgroundColor: '#F4F3EC',
-    paddingVertical: 8,
-    paddingHorizontal: 10,
+    marginTop: 6,
+    borderRadius: 5,
+    backgroundColor: C.fondoTotal,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
   },
   resumenFila: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 2,
+    paddingVertical: 2.5,
   },
-  resumenEtq: { fontSize: 9, fontFamily: 'Helvetica-Bold' },
-  resumenVal: { fontSize: 10.5, fontFamily: 'Helvetica-Bold' },
-  vacio: { fontSize: 7.8, color: GRIS, fontStyle: 'italic', marginTop: 4 },
-  pie: {
-    position: 'absolute',
-    bottom: 24,
-    left: 42,
-    right: 42,
-    borderTopWidth: 1,
-    borderTopColor: LINEA,
-    paddingTop: 8,
-    fontSize: 7,
-    color: GRIS,
-  },
+  resumenEtq: { fontSize: 9.5, fontFamily: 'Helvetica-Bold', color: C.navy },
+  resumenVal: { fontSize: 11, fontFamily: 'Courier', color: C.navy },
+  vacio: { fontSize: 7.8, color: C.gris, marginTop: 4 },
 });
 
 const fechaLarga = (iso: string | null) =>
@@ -188,23 +167,14 @@ function Documento({ d }: { d: DatosPdfFicha }) {
     year: 'numeric',
   });
   return (
-    <Document title={`Ficha ${d.codigo}`} author={EMPRESA.razonSocial} creator="Métrica · Sistema Operativo">
+    <Document
+      title={`Ficha ${d.codigo}`}
+      author={EMPRESA.razonSocial}
+      creator="Métrica · Sistema Operativo"
+    >
       <Page size="A4" style={s.pagina}>
-        <View style={s.cabecera}>
-          <View>
-            <Text style={s.logo}>
-              Métri<Text style={s.logoAcento}>ca</Text>
-            </Text>
-            <Text style={s.sub}>
-              {EMPRESA.razonSocial} · RUC {EMPRESA.ruc}
-            </Text>
-          </View>
-          <View style={s.meta}>
-            <Text>FICHA DE APERTURA</Text>
-            <Text style={s.metaCodigo}>{d.codigo}</Text>
-            <Text>{hoy}</Text>
-          </View>
-        </View>
+        {d.anulada && <SelloAnulado />}
+        <EncabezadoPdf tipo="FICHA DE APERTURA" codigo={d.codigo} fecha={hoy} />
 
         <Text style={s.seccion}>Cliente</Text>
         <View style={s.rejilla}>
@@ -219,12 +189,17 @@ function Documento({ d }: { d: DatosPdfFicha }) {
         <View style={s.rejilla}>
           <Dato k="Inicio de acciones" v={fechaLarga(d.servicio.inicio)} />
           <Dato k="Fin de acciones" v={fechaLarga(d.servicio.fin)} />
-          <Dato k="Moneda general" v={d.servicio.moneda === 'PEN' ? 'Soles (PEN)' : 'Dólares (USD)'} />
+          <Dato
+            k="Moneda general"
+            v={d.servicio.moneda === 'PEN' ? 'Soles (PEN)' : 'Dólares (USD)'}
+          />
           <Dato k="Facturar antes del fin" v={d.servicio.facturarAntes ? 'Sí' : 'No'} />
           {d.servicio.observaciones ? (
             <View style={{ width: '100%', marginBottom: 6 }}>
               <Text style={s.datoK}>Observaciones</Text>
-              <Text style={s.datoV}>{d.servicio.observaciones}</Text>
+              <Text style={[s.datoV, { fontFamily: 'Helvetica' }]}>
+                {d.servicio.observaciones}
+              </Text>
             </View>
           ) : null}
         </View>
@@ -243,11 +218,7 @@ function Documento({ d }: { d: DatosPdfFicha }) {
                 <Text style={[s.cab, s.fcTotal]}>Total</Text>
               </View>
               {d.facturasCliente.map((fc, i) => (
-                <View
-                  key={i}
-                  style={i === d.facturasCliente.length - 1 ? s.filaUltima : s.fila}
-                  wrap={false}
-                >
+                <View key={i} style={s.fila} wrap={false}>
                   <Text style={[s.celda, s.fcFact]}>{fc.numFactura || '—'}</Text>
                   <Text style={[s.celda, s.fcOc]}>{fc.oc || '—'}</Text>
                   <Text style={[s.celda, s.fcHes]}>{fc.hes || '—'}</Text>
@@ -286,7 +257,7 @@ function Documento({ d }: { d: DatosPdfFicha }) {
                   <Text style={s.provMeta}>{banco}</Text>
                 </View>
                 <View>
-                  <Text style={s.datoK}>Monto</Text>
+                  <Text style={[s.datoK, { textAlign: 'right' }]}>Monto</Text>
                   <Text style={s.provMonto}>
                     {formatearMonto(p.monto, d.servicio.moneda)}
                   </Text>
@@ -297,7 +268,7 @@ function Documento({ d }: { d: DatosPdfFicha }) {
                 <Text style={s.vacio}>Sin facturas de seguimiento.</Text>
               ) : (
                 <>
-                  <View style={[s.tabla, { marginTop: 6 }]}>
+                  <View style={[s.tabla, { marginTop: 7 }]}>
                     <View style={s.filaCab}>
                       <Text style={[s.cab, s.pfOc]}>N° OC</Text>
                       <Text style={[s.cab, s.pfFact]}>N° factura</Text>
@@ -305,11 +276,7 @@ function Documento({ d }: { d: DatosPdfFicha }) {
                       <Text style={[s.cab, s.pfTotal]}>Total</Text>
                     </View>
                     {p.facturas.map((fp, j) => (
-                      <View
-                        key={j}
-                        style={j === p.facturas.length - 1 ? s.filaUltima : s.fila}
-                        wrap={false}
-                      >
+                      <View key={j} style={s.fila} wrap={false}>
                         <Text style={[s.celda, s.pfOc]}>{fp.numOc || '—'}</Text>
                         <Text style={[s.celda, s.pfFact]}>{fp.numFactura || '—'}</Text>
                         <Text style={[s.celda, s.pfFecha]}>{fechaLarga(fp.fechaEmision)}</Text>
@@ -348,7 +315,7 @@ function Documento({ d }: { d: DatosPdfFicha }) {
               </Text>
             </View>
             <View style={s.resumenFila}>
-              <Text style={[s.resumenEtq, { color: GRIS }]}>
+              <Text style={[s.resumenEtq, { color: C.gris }]}>
                 Total de seguimiento
               </Text>
               <Text style={s.resumenVal}>
@@ -365,10 +332,7 @@ function Documento({ d }: { d: DatosPdfFicha }) {
           </View>
         )}
 
-        <Text style={s.pie} fixed>
-          Ficha de apertura generada por el Sistema Operativo de {EMPRESA.nombre} ·
-          documento de uso interno
-        </Text>
+        <PiePdf />
       </Page>
     </Document>
   );
