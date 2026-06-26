@@ -43,6 +43,12 @@ const ICONOS: Record<string, React.ReactNode> = {
       <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
     </svg>
   ),
+  control: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <path d="M3 9h18M3 15h18M9 3v18" />
+    </svg>
+  ),
   usuarios: (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
@@ -121,7 +127,7 @@ export function Sidebar({ grupos }: { grupos: GrupoNav[] }) {
           métrica.com.pe
         </div>
         <div className="mt-1 font-mono text-[11px] text-lateral-texto/50">
-          fase 2 · fichas de apertura
+          fase 4 · tabla de control
         </div>
       </div>
     </aside>

@@ -58,6 +58,7 @@ export default async function LayoutProtegido({
           badge: pendientes,
         },
         { href: '/ordenes', etiqueta: 'Órdenes (ODA)', icono: 'ordenes' },
+        { href: '/control', etiqueta: 'Tabla de control', icono: 'control' },
       ],
     });
   }
