@@ -116,7 +116,10 @@ export default async function PaginaFicha({
       ejecutivo={uno(cot?.ejecutivo ?? null)?.nombre ?? '—'}
       puedeEditar={puedeEditar}
       esAdmin={esAdmin}
-      puedeGenerarOda={esAdmin && ficha.estado === 'completa'}
+      puedeGenerarOda={
+        esAdmin &&
+        ['lista_ejecutivo', 'completa'].includes(ficha.estado as string)
+      }
       odasPorProveedor={odasPorProveedor}
       pdfHref={ficha.pdf_url ? `/fichas/${ficha.id as string}/pdf` : null}
       inicial={{

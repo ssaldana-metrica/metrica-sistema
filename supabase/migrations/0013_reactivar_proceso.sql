@@ -17,6 +17,38 @@ alter table cotizaciones
 alter table ordenes_adquisicion
   add column if not exists estado_previo_anulacion estado_oda;
 
+-- Backfill: los procesos anulados por la versión ANTERIOR de anular_proceso (que
+-- no guardaba el estado previo) también deben poder reactivarse; si no,
+-- reactivar_proceso omitiría sus ODAs y sus códigos ODA quedarían muertos. Se
+-- infiere el estado previo por las marcas de tiempo. Solo toca documentos de
+-- procesos cuya ficha está anulada (fueron parte de una anulación en cascada).
+update fichas_apertura f
+   set estado_previo_anulacion = case
+         when f.fecha_completada is not null then 'completa'::estado_ficha
+         when f.lista_ejecutivo_en is not null then 'lista_ejecutivo'::estado_ficha
+         else 'en_proceso'::estado_ficha
+       end
+ where f.estado = 'anulada' and f.estado_previo_anulacion is null;
+
+update cotizaciones c
+   set estado_previo_anulacion = 'aprobada'::estado_cotizacion
+ where c.estado = 'anulada' and c.estado_previo_anulacion is null
+   and exists (
+     select 1 from fichas_apertura f
+      where f.cotizacion_id = c.id and f.estado = 'anulada'
+   );
+
+update ordenes_adquisicion o
+   set estado_previo_anulacion = case
+         when o.fecha_emision is not null then 'emitida'::estado_oda
+         else 'borrador'::estado_oda
+       end
+ where o.estado = 'anulada' and o.estado_previo_anulacion is null
+   and exists (
+     select 1 from fichas_apertura f
+      where f.id = o.ficha_id and f.estado = 'anulada'
+   );
+
 -- El candado "código anulado es final" gana una excepción controlada: durante
 -- una reactivación (app.reactivando = 'on') sí se permite salir de 'anulado'.
 -- En cualquier otro contexto, un código anulado jamás vuelve.
