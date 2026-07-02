@@ -20,9 +20,10 @@ export default async function PaginaFicha({
   const { data: ficha } = await supabase
     .from('fichas_apertura')
     .select(
-      `id, codigo, estado, cliente_nombre, cliente_ruc, politica_pago,
-       contacto_aprobacion, correo_contacto, inicio_acciones, fin_acciones,
-       facturar_antes_del_fin, moneda, observaciones_ejecutivo, pdf_url,
+      `id, codigo, estado, cliente_nombre, cliente_razon_social, cliente_ruc,
+       politica_pago, contacto_aprobacion, correo_contacto, inicio_acciones,
+       fin_acciones, facturar_antes_del_fin, moneda, observaciones_ejecutivo,
+       pdf_url,
        cotizacion:cotizaciones!inner(
          id, codigo, proyecto, ejecutivo_id,
          ejecutivo:usuarios!cotizaciones_ejecutivo_id_fkey(nombre)
@@ -36,7 +37,7 @@ export default async function PaginaFicha({
     .from('ficha_proveedores')
     .select(
       `id, orden, agencia, influencer_proveedor, ruc, descripcion, monto, banco,
-       cuenta_cci, email_proveedor`,
+       cuenta, cci, email_proveedor`,
     )
     .eq('ficha_id', id)
     .order('orden');
@@ -45,7 +46,7 @@ export default async function PaginaFicha({
   const [{ data: facCliente }, { data: facProv }] = await Promise.all([
     supabase
       .from('ficha_facturas_cliente')
-      .select('orden, num_factura, oc, hes, fecha_emision, total')
+      .select('orden, num_factura, oc, hes, fecha_emision, total, fee')
       .eq('ficha_id', id)
       .order('orden'),
     provIds.length
@@ -120,6 +121,7 @@ export default async function PaginaFicha({
       pdfHref={ficha.pdf_url ? `/fichas/${ficha.id as string}/pdf` : null}
       inicial={{
         clienteNombre: (ficha.cliente_nombre as string) ?? '',
+        clienteRazonSocial: (ficha.cliente_razon_social as string) ?? '',
         clienteRuc: (ficha.cliente_ruc as string) ?? '',
         politicaPago: (ficha.politica_pago as string) ?? '',
         contactoAprobacion: (ficha.contacto_aprobacion as string) ?? '',
@@ -137,7 +139,8 @@ export default async function PaginaFicha({
         descripcion: (p.descripcion as string) ?? '',
         monto: p.monto != null ? String(p.monto) : '',
         banco: (p.banco as string) ?? '',
-        cuentaCci: (p.cuenta_cci as string) ?? '',
+        cuenta: (p.cuenta as string) ?? '',
+        cci: (p.cci as string) ?? '',
         emailProveedor: (p.email_proveedor as string) ?? '',
       }))}
       facturasClienteIniciales={(facCliente ?? []).map((x) => ({
@@ -146,6 +149,7 @@ export default async function PaginaFicha({
         hes: (x.hes as string) ?? '',
         fechaEmision: (x.fecha_emision as string | null) ?? null,
         total: x.total != null ? String(x.total) : '',
+        fee: x.fee != null ? String(x.fee) : '',
       }))}
       seguimientoProveedores={(provs ?? []).map((p) => ({
         id: p.id as string,

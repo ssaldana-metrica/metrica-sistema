@@ -1,56 +1,39 @@
 import { redondear } from '@/lib/calculos';
 
-// ⚠️ PARÁMETROS TRIBUTARIOS DE LA ODA — PENDIENTES DE CONFIRMAR CON CONTABILIDAD
-// (falta definir detracción y casos especiales). Para ajustar el tratamiento,
-// cambia SOLO los números o la lógica de `calcularImpuestos` aquí; el PDF y la
-// pantalla lo toman automáticamente.
+// ⚠️ PARÁMETROS TRIBUTARIOS DE LA ODA — El IGV lo decide el TIPO DE COMPROBANTE:
+// una factura lleva IGV; un Recibo por Honorarios (RxH) no. Para ajustar el
+// porcentaje, cambia el número aquí; el PDF y la pantalla lo toman solos.
 export const IMPUESTOS = {
-  igvPorcentaje: 18, //         empresa: IGV sobre el monto
-  retencionRentaPorcentaje: 8, // persona natural: retención de renta sobre el monto
+  igvPorcentaje: 18, // IGV que se agrega cuando el comprobante es una factura
 };
 
+// Tipo de proveedor: dato INFORMATIVO (empresa / persona natural). Ya NO decide
+// el IGV; eso lo hace el tipo de comprobante.
 export type TipoProveedorImp = 'empresa' | 'persona_natural';
 
+// Tipo de comprobante: DECIDE el IGV. Factura → con IGV; RxH → solo el total.
+export type TipoComprobante = 'factura' | 'rxh';
+
 export type DesgloseImpuestos = {
-  modo: 'igv' | 'retencion';
-  base: number; // monto base
-  porcentaje: number;
-  impuesto: number; // IGV (empresa) o retención (persona natural)
-  total: number; // empresa: base + IGV · persona natural: base − retención
-  etiquetaImpuesto: string;
-  etiquetaTotal: string;
+  conIgv: boolean; // true → factura (se muestra IGV); false → RxH (solo total)
+  base: number; // monto base (suma de líneas)
+  porcentaje: number; // % de IGV (0 en RxH)
+  igv: number; // monto del IGV (0 en RxH)
+  total: number; // factura: base + IGV · RxH: base
 };
 
-// Regla actual (provisional):
-//  - empresa         → se AGREGA IGV; total = base + IGV.
-//  - persona_natural → se RETIENE renta; neto a pagar = base − retención (sin IGV).
+// Regla:
+//  - factura → se AGREGA IGV; total = base + IGV.
+//  - rxh     → sin IGV; total = base (únicamente el total).
 export function calcularImpuestos(
   monto: number,
-  tipo: TipoProveedorImp,
+  comprobante: TipoComprobante,
 ): DesgloseImpuestos {
   const base = redondear(monto || 0);
-  if (tipo === 'persona_natural') {
-    const porcentaje = IMPUESTOS.retencionRentaPorcentaje;
-    const impuesto = redondear((base * porcentaje) / 100);
-    return {
-      modo: 'retencion',
-      base,
-      porcentaje,
-      impuesto,
-      total: redondear(base - impuesto),
-      etiquetaImpuesto: `Retención de renta (${porcentaje}%)`,
-      etiquetaTotal: 'Neto a pagar',
-    };
+  if (comprobante === 'rxh') {
+    return { conIgv: false, base, porcentaje: 0, igv: 0, total: base };
   }
   const porcentaje = IMPUESTOS.igvPorcentaje;
-  const impuesto = redondear((base * porcentaje) / 100);
-  return {
-    modo: 'igv',
-    base,
-    porcentaje,
-    impuesto,
-    total: redondear(base + impuesto),
-    etiquetaImpuesto: `IGV (${porcentaje}%)`,
-    etiquetaTotal: 'Total',
-  };
+  const igv = redondear((base * porcentaje) / 100);
+  return { conIgv: true, base, porcentaje, igv, total: redondear(base + igv) };
 }

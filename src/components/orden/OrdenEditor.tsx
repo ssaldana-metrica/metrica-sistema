@@ -13,7 +13,7 @@ import {
 import { BadgeEstado } from '@/components/ui/BadgeEstado';
 import { Spinner } from '@/components/ui/Spinner';
 import { useToast } from '@/components/ui/Toast';
-import { calcularImpuestos } from '@/config/impuestos';
+import { calcularImpuestos, type TipoComprobante } from '@/config/impuestos';
 import { formatearMonto, redondear, type Moneda } from '@/lib/calculos';
 
 type LineaFila = {
@@ -67,7 +67,7 @@ export function OrdenEditor(props: OrdenEditorProps) {
   const totalLinea = (l: LineaFila) =>
     redondear((parseFloat(l.cantidad) || 0) * (parseFloat(l.precioUnitario) || 0));
   const total = lineas.reduce((a, l) => a + totalLinea(l), 0);
-  const imp = calcularImpuestos(redondear(total), d.tipoProveedor);
+  const imp = calcularImpuestos(redondear(total), d.tipoComprobante);
 
   const payload = (): DatosOrden => ({
     ...d,
@@ -215,6 +215,19 @@ export function OrdenEditor(props: OrdenEditorProps) {
                 <option value="persona_natural">Persona natural</option>
               </select>
             </Campo>
+            <Campo label="Tipo de comprobante">
+              <select
+                value={d.tipoComprobante}
+                disabled={!editable}
+                onChange={(e) =>
+                  fijar('tipoComprobante', e.target.value as TipoComprobante)
+                }
+                className={inputCls}
+              >
+                <option value="factura">Factura (con IGV)</option>
+                <option value="rxh">Recibo por Honorarios (sin IGV)</option>
+              </select>
+            </Campo>
             <Campo label="Agencia">
               <input
                 value={d.agencia}
@@ -345,38 +358,42 @@ export function OrdenEditor(props: OrdenEditorProps) {
             </button>
           )}
 
-          {/* Total + impuestos */}
+          {/* Total (+ IGV solo si es factura) */}
           <div className="mt-5 flex justify-end">
             <div className="w-72">
-              <div className="flex justify-between border-b border-linea-suave py-1.5 text-[13px]">
-                <span className="text-tinta-tenue">
-                  {imp.modo === 'igv' ? 'Subtotal' : 'Monto (honorarios)'}
-                </span>
-                <span className="font-mono">{formatearMonto(imp.base, d.moneda)}</span>
-              </div>
-              <div className="flex justify-between border-b border-linea-suave py-1.5 text-[13px]">
-                <span className="text-tinta-tenue">{imp.etiquetaImpuesto}</span>
-                <span className="font-mono">
-                  {imp.modo === 'retencion' ? '− ' : ''}
-                  {formatearMonto(imp.impuesto, d.moneda)}
-                </span>
-              </div>
+              {imp.conIgv && (
+                <>
+                  <div className="flex justify-between border-b border-linea-suave py-1.5 text-[13px]">
+                    <span className="text-tinta-tenue">Subtotal</span>
+                    <span className="font-mono">
+                      {formatearMonto(imp.base, d.moneda)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between border-b border-linea-suave py-1.5 text-[13px]">
+                    <span className="text-tinta-tenue">
+                      IGV ({imp.porcentaje}%)
+                    </span>
+                    <span className="font-mono">
+                      {formatearMonto(imp.igv, d.moneda)}
+                    </span>
+                  </div>
+                </>
+              )}
               <div className="mt-1 flex justify-between border-t-2 border-tinta pt-2 text-[15px] font-bold">
-                <span>{imp.etiquetaTotal}</span>
+                <span>Total</span>
                 <span className="font-mono">{formatearMonto(imp.total, d.moneda)}</span>
               </div>
             </div>
           </div>
           <p className="mt-3 text-[11.5px] text-tinta-tenue">
-            {imp.modo === 'igv'
-              ? 'Proveedor empresa: se agrega IGV.'
-              : 'Proveedor persona natural: se retiene renta (sin IGV).'}{' '}
-            Los porcentajes están pendientes de confirmar con contabilidad.
+            {imp.conIgv
+              ? `Comprobante factura: se agrega IGV (${imp.porcentaje}%).`
+              : 'Recibo por Honorarios: sin IGV; se muestra únicamente el total.'}
           </p>
         </Tarjeta>
 
         <Tarjeta titulo="Datos de pago">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Campo label="Banco">
               <input
                 value={d.banco}
@@ -385,12 +402,20 @@ export function OrdenEditor(props: OrdenEditorProps) {
                 className={inputCls}
               />
             </Campo>
-            <Campo label="Cuenta / CCI">
+            <Campo label="Cuenta">
               <input
-                value={d.cuentaCci}
+                value={d.cuenta}
                 disabled={!editable}
-                onChange={(e) => fijar('cuentaCci', e.target.value)}
+                onChange={(e) => fijar('cuenta', e.target.value)}
                 className={inputCls}
+              />
+            </Campo>
+            <Campo label="CCI">
+              <input
+                value={d.cci}
+                disabled={!editable}
+                onChange={(e) => fijar('cci', e.target.value)}
+                className={`${inputCls} font-mono`}
               />
             </Campo>
             <Campo label="Email del proveedor">

@@ -16,6 +16,7 @@ export type FacturaClientePdf = {
   hes: string;
   fechaEmision: string | null;
   total: number | null;
+  fee: number | null;
 };
 
 export type FacturaProveedorPdf = {
@@ -39,6 +40,7 @@ export type DatosPdfFicha = {
   codigo: string;
   cliente: {
     nombre: string;
+    razonSocial: string;
     ruc: string;
     politicaPago: string;
     contacto: string;
@@ -60,7 +62,8 @@ export type DatosPdfFicha = {
     descripcion: string;
     monto: number;
     banco: string;
-    cuentaCci: string;
+    cuenta: string;
+    cci: string;
     facturas: FacturaProveedorPdf[];
   }[];
   anulada?: boolean;
@@ -104,11 +107,12 @@ const s = StyleSheet.create({
   },
   celda: { paddingVertical: 6, paddingHorizontal: 6, fontSize: 8 },
   // Facturas del cliente
-  fcFact: { width: '24%', fontFamily: 'Helvetica-Bold' },
-  fcOc: { width: '20%' },
-  fcHes: { width: '18%' },
-  fcFecha: { width: '20%' },
-  fcTotal: { width: '18%', textAlign: 'right', fontFamily: 'Courier' },
+  fcFact: { width: '22%', fontFamily: 'Helvetica-Bold' },
+  fcOc: { width: '16%' },
+  fcHes: { width: '16%' },
+  fcFecha: { width: '18%' },
+  fcTotal: { width: '14%', textAlign: 'right', fontFamily: 'Courier' },
+  fcFee: { width: '14%', textAlign: 'right', fontFamily: 'Courier' },
   // Proveedor
   provBloque: { borderWidth: 1, borderColor: C.linea, borderRadius: 5, marginBottom: 9, padding: 10 },
   provNombre: { fontSize: 9.5, fontFamily: 'Helvetica-Bold', color: C.navy },
@@ -179,6 +183,7 @@ function Documento({ d }: { d: DatosPdfFicha }) {
         <Text style={s.seccion}>Cliente</Text>
         <View style={s.rejilla}>
           <Dato k="Cliente" v={d.cliente.nombre} />
+          <Dato k="Razón social" v={d.cliente.razonSocial || '—'} />
           <Dato k="RUC" v={d.cliente.ruc || '—'} />
           <Dato k="Política de pago" v={d.cliente.politicaPago || '—'} />
           <Dato k="Contacto de aprobación" v={d.cliente.contacto || '—'} />
@@ -216,6 +221,7 @@ function Documento({ d }: { d: DatosPdfFicha }) {
                 <Text style={[s.cab, s.fcHes]}>HES</Text>
                 <Text style={[s.cab, s.fcFecha]}>Emisión</Text>
                 <Text style={[s.cab, s.fcTotal]}>Total</Text>
+                <Text style={[s.cab, s.fcFee]}>Fee</Text>
               </View>
               {d.facturasCliente.map((fc, i) => (
                 <View key={i} style={s.fila} wrap={false}>
@@ -225,6 +231,9 @@ function Documento({ d }: { d: DatosPdfFicha }) {
                   <Text style={[s.celda, s.fcFecha]}>{fechaLarga(fc.fechaEmision)}</Text>
                   <Text style={[s.celda, s.fcTotal]}>
                     {montoOpt(fc.total, d.servicio.moneda)}
+                  </Text>
+                  <Text style={[s.celda, s.fcFee]}>
+                    {montoOpt(fc.fee, d.servicio.moneda)}
                   </Text>
                 </View>
               ))}
@@ -238,13 +247,31 @@ function Documento({ d }: { d: DatosPdfFicha }) {
                 )}
               </Text>
             </View>
+            {d.facturasCliente.some((fc) => fc.fee != null) && (
+              <View style={[s.totalFila, { marginTop: 2, paddingTop: 2, borderTopWidth: 0 }]}>
+                <Text style={s.totalEtq}>Total fee</Text>
+                <Text style={s.totalVal}>
+                  {formatearMonto(
+                    d.facturasCliente.reduce((a, fc) => a + (fc.fee ?? 0), 0),
+                    d.servicio.moneda,
+                  )}
+                </Text>
+              </View>
+            )}
           </>
         )}
 
         <Text style={s.seccion}>Proveedores que cobran</Text>
         {d.proveedores.map((p) => {
           const nombre = [p.agencia, p.influencer].filter(Boolean).join(' · ') || '—';
-          const banco = [p.banco, p.cuentaCci].filter(Boolean).join(' · ') || '—';
+          const banco =
+            [
+              p.banco,
+              p.cuenta ? `Cta. ${p.cuenta}` : '',
+              p.cci ? `CCI ${p.cci}` : '',
+            ]
+              .filter(Boolean)
+              .join(' · ') || '—';
           return (
             <View key={p.orden} style={s.provBloque} wrap={false}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>

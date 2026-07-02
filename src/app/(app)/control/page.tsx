@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { exigirRol } from '@/lib/auth';
 import { crearClienteServidor } from '@/lib/supabase/server';
+import { puedeReactivarAnulacion } from '@/config/permisos';
 import { uno } from '@/lib/util';
 import { estadoProceso, controlVacio, type EstadoProc } from '@/lib/control';
 import { EstadoVacio, IconosVacio } from '@/components/ui/EstadoVacio';
@@ -22,7 +23,8 @@ export default async function PaginaControl({
 }: {
   searchParams: Promise<{ estado?: string; q?: string }>;
 }) {
-  await exigirRol(['admin', 'gerencia']);
+  const sesion = await exigirRol(['admin', 'gerencia']);
+  const puedeReactivar = puedeReactivarAnulacion(sesion.usuario);
 
   const params = await searchParams;
   const filtro = FILTROS.some((f) => f.valor === params.estado)
@@ -169,7 +171,7 @@ export default async function PaginaControl({
       </div>
 
       {visibles.length > 0 ? (
-        <TablaControl procesos={visibles} />
+        <TablaControl procesos={visibles} puedeReactivar={puedeReactivar} />
       ) : (
         <EstadoVacio
           icono={filtro || params.q ? IconosVacio.busqueda : IconosVacio.tabla}

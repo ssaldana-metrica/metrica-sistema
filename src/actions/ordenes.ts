@@ -7,7 +7,7 @@ import { crearClienteAdmin } from '@/lib/supabase/admin';
 import { uno } from '@/lib/util';
 import { generarPdfOda } from '@/lib/pdf-oda';
 import { redondear, type Moneda } from '@/lib/calculos';
-import type { TipoProveedorImp } from '@/config/impuestos';
+import type { TipoProveedorImp, TipoComprobante } from '@/config/impuestos';
 
 export type TipoProveedor = 'empresa' | 'persona_natural';
 
@@ -26,11 +26,13 @@ export type DatosOrden = {
   nombreComercial: string;
   ruc: string;
   tipoProveedor: TipoProveedor;
+  tipoComprobante: TipoComprobante;
   condicionesPago: string;
   moneda: Moneda;
   detalles: DetalleOrden[];
   banco: string;
-  cuentaCci: string;
+  cuenta: string;
+  cci: string;
   emailProveedor: string;
 };
 
@@ -59,7 +61,7 @@ export async function generarOda(
     .from('ficha_proveedores')
     .select(
       `id, ficha_id, agencia, influencer_proveedor, ruc, descripcion, monto,
-       banco, cuenta_cci, email_proveedor,
+       banco, cuenta, cci, email_proveedor,
        ficha:fichas_apertura!inner(
          estado, moneda, cotizacion:cotizaciones!inner(codigo)
        )`,
@@ -75,8 +77,13 @@ export async function generarOda(
       cotizacion: { codigo: string }[];
     }[] | null,
   );
-  if (ficha?.estado !== 'completa')
-    return { error: 'La ficha debe estar completa para generar órdenes.' };
+  // Se puede generar en cuanto el ejecutivo marca su parte lista (no hace falta
+  // cerrar la ficha ni generar su PDF).
+  if (!['lista_ejecutivo', 'completa'].includes(ficha?.estado ?? ''))
+    return {
+      error:
+        'Genera la orden cuando el ejecutivo haya marcado su parte como lista.',
+    };
 
   // ¿Ya tiene orden? No duplicar.
   const { data: existente } = await supabase
@@ -112,7 +119,8 @@ export async function generarOda(
       monto: Number(prov.monto) || 0,
       moneda: ficha?.moneda ?? 'PEN',
       banco: (prov.banco as string) ?? '',
-      cuenta_cci: (prov.cuenta_cci as string) ?? '',
+      cuenta: (prov.cuenta as string) ?? '',
+      cci: (prov.cci as string) ?? '',
       email_proveedor: (prov.email_proveedor as string) ?? '',
     })
     .select('id')
@@ -194,10 +202,12 @@ export async function guardarOrden(
       nombre_comercial: datos.nombreComercial.trim(),
       ruc: datos.ruc.trim(),
       tipo_proveedor: datos.tipoProveedor,
+      tipo_comprobante: datos.tipoComprobante,
       monto: total, // total = suma de las líneas
       moneda: datos.moneda,
       banco: datos.banco.trim(),
-      cuenta_cci: datos.cuentaCci.trim(),
+      cuenta: datos.cuenta.trim(),
+      cci: datos.cci.trim(),
       email_proveedor: datos.emailProveedor.trim(),
       condiciones_pago: datos.condicionesPago.trim(),
     })
@@ -247,7 +257,8 @@ export async function emitirOrden(id: string): Promise<ResultadoEmitir> {
     .from('ordenes_adquisicion')
     .select(
       `codigo, razon_social, nombre_comercial, ruc, tipo_proveedor,
-       monto, moneda, banco, cuenta_cci, email_proveedor, condiciones_pago`,
+       tipo_comprobante, monto, moneda, banco, cuenta, cci, email_proveedor,
+       condiciones_pago`,
     )
     .eq('id', id)
     .maybeSingle();
@@ -272,13 +283,15 @@ export async function emitirOrden(id: string): Promise<ResultadoEmitir> {
     pdf = await generarPdfOda({
       codigo: o.codigo as string,
       fechaEmision: new Date().toISOString(),
+      comprobante: (o.tipo_comprobante as TipoComprobante) ?? 'factura',
       proveedor: {
         razonSocial: (o.razon_social as string) ?? '',
         nombreComercial: (o.nombre_comercial as string) ?? '',
         ruc: (o.ruc as string) ?? '',
         tipo: (o.tipo_proveedor as TipoProveedorImp) ?? 'empresa',
         banco: (o.banco as string) ?? '',
-        cuentaCci: (o.cuenta_cci as string) ?? '',
+        cuenta: (o.cuenta as string) ?? '',
+        cci: (o.cci as string) ?? '',
         email: (o.email_proveedor as string) ?? '',
       },
       detalles: (detalles ?? []).map((x) => ({

@@ -16,6 +16,7 @@ import { generarOda } from '@/actions/ordenes';
 import { BadgeEstado } from '@/components/ui/BadgeEstado';
 import { Spinner } from '@/components/ui/Spinner';
 import { useToast } from '@/components/ui/Toast';
+import { CCI_LARGO, soloDigitos } from '@/lib/cci';
 import { formatearMonto, redondear, type Moneda } from '@/lib/calculos';
 
 const numOnull = (v: string) => (v.trim() ? parseFloat(v) || 0 : null);
@@ -28,7 +29,8 @@ type ProveedorFila = {
   descripcion: string;
   monto: string;
   banco: string;
-  cuentaCci: string;
+  cuenta: string;
+  cci: string;
   emailProveedor: string;
 };
 const filaVacia = (): ProveedorFila => ({
@@ -38,7 +40,8 @@ const filaVacia = (): ProveedorFila => ({
   descripcion: '',
   monto: '',
   banco: '',
-  cuentaCci: '',
+  cuenta: '',
+  cci: '',
   emailProveedor: '',
 });
 
@@ -49,6 +52,7 @@ type FacturaClienteFila = {
   hes: string;
   fechaEmision: string | null;
   total: string;
+  fee: string;
 };
 const facturaClienteVacia = (): FacturaClienteFila => ({
   numFactura: '',
@@ -56,6 +60,7 @@ const facturaClienteVacia = (): FacturaClienteFila => ({
   hes: '',
   fechaEmision: null,
   total: '',
+  fee: '',
 });
 
 type FacturaProvFila = {
@@ -162,7 +167,8 @@ export function FichaEditor(props: FichaEditorProps) {
           p.descripcion,
           p.monto,
           p.banco,
-          p.cuentaCci,
+          p.cuenta,
+          p.cci,
           p.emailProveedor,
         ].some((v) => v.trim()),
       )
@@ -173,7 +179,8 @@ export function FichaEditor(props: FichaEditorProps) {
         descripcion: p.descripcion,
         monto: parseFloat(p.monto) || 0,
         banco: p.banco,
-        cuentaCci: p.cuentaCci,
+        cuenta: p.cuenta,
+        cci: p.cci,
         emailProveedor: p.emailProveedor,
       }));
 
@@ -191,6 +198,27 @@ export function FichaEditor(props: FichaEditorProps) {
 
   function marcarLista() {
     setError(null);
+    // Aviso inmediato: cuenta y CCI obligatorios y CCI de 20 dígitos en cada
+    // proveedor con nombre y monto. (El servidor lo revalida igual.)
+    const provValidos = provs.filter(
+      (p) =>
+        (p.agencia.trim() || p.influencerProveedor.trim()) &&
+        (parseFloat(p.monto) || 0) > 0,
+    );
+    for (const p of provValidos) {
+      const quien = p.agencia.trim() || p.influencerProveedor.trim();
+      if (!p.cuenta.trim()) {
+        setError(`Falta el número de cuenta de ${quien}.`);
+        return;
+      }
+      const cci = soloDigitos(p.cci);
+      if (cci.length !== CCI_LARGO) {
+        setError(
+          `El CCI de ${quien} debe tener ${CCI_LARGO} dígitos (tiene ${cci.length}).`,
+        );
+        return;
+      }
+    }
     startTransition(async () => {
       const r = await marcarListaEjecutivo(props.fichaId, datos, aEntrada());
       if ('error' in r) setError(r.error);
@@ -252,6 +280,7 @@ export function FichaEditor(props: FichaEditorProps) {
       hes: f.hes,
       fechaEmision: f.fechaEmision,
       total: numOnull(f.total),
+      fee: numOnull(f.fee),
     }));
   const segProvsPayload = () =>
     segProvs.map((g) => ({
@@ -432,6 +461,16 @@ export function FichaEditor(props: FichaEditorProps) {
                   className={inputCls}
                 />
               </Campo>
+              <Campo label="Razón social">
+                <input
+                  type="text"
+                  value={datos.clienteRazonSocial}
+                  disabled={!editable}
+                  placeholder="Nombre legal del cliente"
+                  onChange={(e) => fijar('clienteRazonSocial', e.target.value)}
+                  className={inputCls}
+                />
+              </Campo>
               <Campo label="RUC">
                 <input
                   type="text"
@@ -535,7 +574,7 @@ export function FichaEditor(props: FichaEditorProps) {
               realmente van a cobrar. Montos en {monedaTexto(datos.moneda)}.
             </p>
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[820px] border-collapse">
+              <table className="w-full min-w-[960px] border-collapse">
                 <thead>
                   <tr className="text-left text-[10.5px] uppercase tracking-wide text-tinta-tenue">
                     <th className="px-2 py-2 font-semibold">Agencia</th>
@@ -546,7 +585,8 @@ export function FichaEditor(props: FichaEditorProps) {
                     <th className="px-2 py-2 font-semibold">Descripción</th>
                     <th className="px-2 py-2 text-right font-semibold">Monto</th>
                     <th className="px-2 py-2 font-semibold">Banco</th>
-                    <th className="px-2 py-2 font-semibold">Cuenta / CCI</th>
+                    <th className="px-2 py-2 font-semibold">Cuenta</th>
+                    <th className="px-2 py-2 font-semibold">CCI (20 díg.)</th>
                     <th className="px-2 py-2 font-semibold">Email</th>
                     <th className="w-8" />
                   </tr>
@@ -613,12 +653,27 @@ export function FichaEditor(props: FichaEditorProps) {
                       </td>
                       <td className="px-1 py-1">
                         <input
-                          value={p.cuentaCci}
+                          value={p.cuenta}
                           disabled={!editable}
                           onChange={(e) =>
-                            fijarProv(i, 'cuentaCci', e.target.value)
+                            fijarProv(i, 'cuenta', e.target.value)
                           }
                           className={celdaCls}
+                        />
+                      </td>
+                      <td className="px-1 py-1">
+                        <input
+                          inputMode="numeric"
+                          value={p.cci}
+                          disabled={!editable}
+                          onChange={(e) =>
+                            fijarProv(i, 'cci', soloDigitos(e.target.value).slice(0, CCI_LARGO))
+                          }
+                          className={`${celdaCls} font-mono ${
+                            p.cci && soloDigitos(p.cci).length !== CCI_LARGO
+                              ? 'border-ambar'
+                              : ''
+                          }`}
                         />
                       </td>
                       <td className="px-1 py-1">
@@ -776,6 +831,19 @@ export function FichaEditor(props: FichaEditorProps) {
                         disabled={!adminEditable}
                         onChange={(e) =>
                           fijarFacCliente(i, 'total', e.target.value)
+                        }
+                        className={`${inputCls} text-right font-mono`}
+                      />
+                    </Campo>
+                    <Campo label={`Fee (${monedaTexto(datos.moneda)})`}>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={f.fee}
+                        disabled={!adminEditable}
+                        onChange={(e) =>
+                          fijarFacCliente(i, 'fee', e.target.value)
                         }
                         className={`${inputCls} text-right font-mono`}
                       />

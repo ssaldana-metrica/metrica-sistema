@@ -3,7 +3,11 @@
 import { useMemo, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { anularProceso, guardarControlLote } from '@/actions/control';
+import {
+  anularProceso,
+  guardarControlLote,
+  reactivarProceso,
+} from '@/actions/control';
 import { Spinner } from '@/components/ui/Spinner';
 import { useToast } from '@/components/ui/Toast';
 import {
@@ -39,7 +43,13 @@ const celda = 'px-3 py-2 align-top';
 const inp =
   'w-full rounded-md border border-linea bg-white px-2 py-1.5 text-[12px] outline-none focus:border-petroleo';
 
-export function TablaControl({ procesos }: { procesos: ProcesoVista[] }) {
+export function TablaControl({
+  procesos,
+  puedeReactivar = false,
+}: {
+  procesos: ProcesoVista[];
+  puedeReactivar?: boolean;
+}) {
   const router = useRouter();
   const toast = useToast();
   const [guardando, startTransition] = useTransition();
@@ -63,6 +73,10 @@ export function TablaControl({ procesos }: { procesos: ProcesoVista[] }) {
     codigo: string;
   } | null>(null);
   const [motivo, setMotivo] = useState('');
+  const [reactivarDe, setReactivarDe] = useState<{
+    fichaId: string;
+    codigo: string;
+  } | null>(null);
 
   const fijar = (provId: string, k: keyof ControlFila, v: string) => {
     setValores((vs) => ({
@@ -105,6 +119,24 @@ export function TablaControl({ procesos }: { procesos: ProcesoVista[] }) {
         toast({
           tipo: 'info',
           texto: `Proceso ${codigo} anulado: cotización, ficha y ODA.`,
+        });
+        router.refresh();
+      }
+    });
+  }
+
+  function reactivar() {
+    if (!reactivarDe) return;
+    setError(null);
+    const codigo = reactivarDe.codigo;
+    startTransition(async () => {
+      const r = await reactivarProceso(reactivarDe.fichaId);
+      if ('error' in r) setError(r.error);
+      else {
+        setReactivarDe(null);
+        toast({
+          tipo: 'exito',
+          texto: `Proceso ${codigo} reactivado: cotización, ficha y ODA.`,
         });
         router.refresh();
       }
@@ -182,13 +214,19 @@ export function TablaControl({ procesos }: { procesos: ProcesoVista[] }) {
                     <td className={celda}>—</td>
                     <td className={celda}>—</td>
                     <td className="border-l-2 border-linea px-3 py-2">
-                      {p.estado !== 'anulado' && (
-                        <BotonAnular
-                          onClick={() =>
-                            setAnularDe({ fichaId: p.fichaId, codigo: p.codigoFA })
-                          }
-                        />
-                      )}
+                      <AccionProceso
+                        p={p}
+                        puedeReactivar={puedeReactivar}
+                        onAnular={() =>
+                          setAnularDe({ fichaId: p.fichaId, codigo: p.codigoFA })
+                        }
+                        onReactivar={() =>
+                          setReactivarDe({
+                            fichaId: p.fichaId,
+                            codigo: p.codigoFA,
+                          })
+                        }
+                      />
                     </td>
                   </tr>
                 );
@@ -276,10 +314,21 @@ export function TablaControl({ procesos }: { procesos: ProcesoVista[] }) {
                       />
                     </td>
                     <td className="border-l-2 border-linea px-3 py-2">
-                      {i === 0 && p.estado !== 'anulado' && (
-                        <BotonAnular
-                          onClick={() =>
-                            setAnularDe({ fichaId: p.fichaId, codigo: p.codigoFA })
+                      {i === 0 && (
+                        <AccionProceso
+                          p={p}
+                          puedeReactivar={puedeReactivar}
+                          onAnular={() =>
+                            setAnularDe({
+                              fichaId: p.fichaId,
+                              codigo: p.codigoFA,
+                            })
+                          }
+                          onReactivar={() =>
+                            setReactivarDe({
+                              fichaId: p.fichaId,
+                              codigo: p.codigoFA,
+                            })
                           }
                         />
                       )}
@@ -312,8 +361,8 @@ export function TablaControl({ procesos }: { procesos: ProcesoVista[] }) {
             </h3>
             <p className="mt-2 rounded-[10px] border border-rojo/30 bg-rojo-fondo px-3.5 py-3 text-[12.5px] text-rojo">
               Esto anulará <b>a la vez</b> la cotización, la ficha de apertura y
-              <b> todas las ODA</b> de este proceso. No se borra nada, pero los
-              códigos quedan anulados y no se reutilizan. No se puede deshacer.
+              <b> todas las ODA</b> de este proceso. No se borra nada. Solo
+              Gerencia o Erika pueden revertir la anulación.
             </p>
             <textarea
               value={motivo}
@@ -346,8 +395,69 @@ export function TablaControl({ procesos }: { procesos: ProcesoVista[] }) {
           </div>
         </div>
       )}
+
+      {/* Modal: reactivar proceso (revertir la anulación) */}
+      {reactivarDe && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-lateral/45 p-6">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-flotante">
+            <h3 className="text-[15px] font-bold">
+              Reactivar el proceso{' '}
+              <span className="font-mono">{reactivarDe.codigo}</span>
+            </h3>
+            <p className="mt-2 rounded-[10px] border border-verde/30 bg-verde-fondo px-3.5 py-3 text-[12.5px] text-verde">
+              Se revertirá la anulación: la cotización, la ficha y sus ODA
+              vuelven a su estado anterior y sus códigos se reactivan. Solo
+              Gerencia y Erika pueden hacerlo.
+            </p>
+            <div className="mt-4 flex justify-end gap-2.5">
+              <button
+                onClick={() => setReactivarDe(null)}
+                disabled={guardando}
+                className="rounded-lg border border-linea bg-white px-4 py-2 text-[13px] font-semibold transition hover:bg-superficie"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={reactivar}
+                disabled={guardando}
+                className="inline-flex items-center gap-2 rounded-lg bg-petroleo px-4 py-2 text-[13px] font-semibold text-white transition hover:bg-petroleo-oscuro disabled:opacity-60"
+              >
+                {guardando && <Spinner />}
+                {guardando ? 'Reactivando…' : 'Reactivar proceso'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
+}
+
+// Acción por proceso: si está anulado, ofrece "Reactivar" (solo a quien puede);
+// en cualquier otro estado, ofrece "Anular".
+function AccionProceso({
+  p,
+  puedeReactivar,
+  onAnular,
+  onReactivar,
+}: {
+  p: ProcesoVista;
+  puedeReactivar: boolean;
+  onAnular: () => void;
+  onReactivar: () => void;
+}) {
+  if (p.estado === 'anulado') {
+    if (!puedeReactivar) return <span className="text-tinta-tenue">—</span>;
+    return (
+      <button
+        onClick={onReactivar}
+        className="rounded-md border border-petroleo/40 bg-white px-2.5 py-1 text-[11.5px] font-semibold text-petroleo-oscuro transition hover:bg-superficie"
+      >
+        Reactivar
+      </button>
+    );
+  }
+  return <BotonAnular onClick={onAnular} />;
 }
 
 function BotonAnular({ onClick }: { onClick: () => void }) {

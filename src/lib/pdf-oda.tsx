@@ -8,20 +8,26 @@ import {
 } from '@react-pdf/renderer';
 import { EMPRESA } from '@/config/empresa';
 import { formatearMonto, type Moneda } from '@/lib/calculos';
-import { calcularImpuestos, type TipoProveedorImp } from '@/config/impuestos';
-import { CLAUSULAS_ODA } from '@/config/oda';
+import {
+  calcularImpuestos,
+  type TipoProveedorImp,
+  type TipoComprobante,
+} from '@/config/impuestos';
+import { CLAUSULAS_ODA, INTRO_CLAUSULAS_ODA } from '@/config/oda';
 import { C, EncabezadoPdf, PiePdf, SelloAnulado } from '@/lib/pdf-marca';
 
 export type DatosPdfOda = {
   codigo: string;
   fechaEmision: string | null;
+  comprobante: TipoComprobante;
   proveedor: {
     razonSocial: string;
     nombreComercial: string;
     ruc: string;
     tipo: TipoProveedorImp;
     banco: string;
-    cuentaCci: string;
+    cuenta: string;
+    cci: string;
     email: string;
   };
   detalles: {
@@ -137,6 +143,10 @@ const s = StyleSheet.create({
     marginBottom: 2,
   },
   clausula: { fontSize: 8.5, color: C.navySuave, marginBottom: 4, lineHeight: 1.5 },
+  // Viñetas de indicaciones antes de las cláusulas numeradas.
+  intro: { flexDirection: 'row', marginBottom: 4 },
+  introBullet: { width: 12, fontSize: 8.5, color: C.navy },
+  introTexto: { flex: 1, fontSize: 8.5, color: C.navySuave, lineHeight: 1.5 },
 });
 
 const fechaLarga = (iso: string | null) =>
@@ -148,7 +158,7 @@ const fechaLarga = (iso: string | null) =>
 
 function Documento({ d }: { d: DatosPdfOda }) {
   const totalDetalles = d.detalles.reduce((a, x) => a + (x.total || 0), 0);
-  const imp = calcularImpuestos(totalDetalles, d.proveedor.tipo);
+  const imp = calcularImpuestos(totalDetalles, d.comprobante);
   return (
     <Document
       title={`Orden de adquisición ${d.codigo}`}
@@ -172,8 +182,13 @@ function Documento({ d }: { d: DatosPdfOda }) {
             k="Tipo"
             v={d.proveedor.tipo === 'persona_natural' ? 'Persona natural' : 'Empresa'}
           />
+          <Dato
+            k="Comprobante"
+            v={d.comprobante === 'rxh' ? 'Recibo por Honorarios' : 'Factura'}
+          />
           <Dato k="Banco" v={d.proveedor.banco || '—'} />
-          <Dato k="Cuenta / CCI" v={d.proveedor.cuentaCci || '—'} />
+          <Dato k="Cuenta" v={d.proveedor.cuenta || '—'} />
+          <Dato k="CCI" v={d.proveedor.cci || '—'} />
           <Dato k="Email" v={d.proveedor.email || '—'} />
         </View>
 
@@ -221,31 +236,29 @@ function Documento({ d }: { d: DatosPdfOda }) {
 
         <View style={s.totales}>
           <View style={s.caja}>
-            <View style={s.filaTot}>
-              <Text style={s.totK}>
-                {imp.modo === 'igv' ? 'Subtotal' : 'Monto (honorarios)'}
-              </Text>
-              <Text style={s.totV}>{formatearMonto(imp.base, d.moneda)}</Text>
-            </View>
-            <View style={s.filaTot}>
-              <Text style={s.totK}>{imp.etiquetaImpuesto}</Text>
-              <Text style={s.totV}>
-                {imp.modo === 'retencion' ? '− ' : ''}
-                {formatearMonto(imp.impuesto, d.moneda)}
-              </Text>
-            </View>
+            {imp.conIgv && (
+              <>
+                <View style={s.filaTot}>
+                  <Text style={s.totK}>Subtotal</Text>
+                  <Text style={s.totV}>{formatearMonto(imp.base, d.moneda)}</Text>
+                </View>
+                <View style={s.filaTot}>
+                  <Text style={s.totK}>IGV ({imp.porcentaje}%)</Text>
+                  <Text style={s.totV}>{formatearMonto(imp.igv, d.moneda)}</Text>
+                </View>
+              </>
+            )}
             <View style={s.granTotal}>
-              <Text style={s.gtK}>{imp.etiquetaTotal}</Text>
+              <Text style={s.gtK}>Total</Text>
               <Text style={s.gtV}>{formatearMonto(imp.total, d.moneda)}</Text>
             </View>
           </View>
         </View>
 
-        {d.proveedor.tipo === 'persona_natural' && (
+        {d.comprobante === 'rxh' && (
           <Text style={s.nota}>
-            Proveedor persona natural: aplica retención de renta del{' '}
-            {imp.porcentaje}% sobre el monto. El neto a pagar ya considera la
-            retención.
+            Recibo por Honorarios: el importe no lleva IGV. De corresponder, se
+            aplicará la retención de renta según la normativa vigente.
           </Text>
         )}
 
@@ -257,6 +270,12 @@ function Documento({ d }: { d: DatosPdfOda }) {
         ) : null}
 
         <Text style={s.seccion}>Cláusulas</Text>
+        {INTRO_CLAUSULAS_ODA.map((t, i) => (
+          <View key={`intro-${i}`} style={s.intro} wrap={false}>
+            <Text style={s.introBullet}>•</Text>
+            <Text style={s.introTexto}>{t}</Text>
+          </View>
+        ))}
         {CLAUSULAS_ODA.map((sec, i) => (
           <View key={i} wrap={false}>
             <Text style={s.clausTitulo}>{sec.titulo}</Text>

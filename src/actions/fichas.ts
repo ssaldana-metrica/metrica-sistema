@@ -8,6 +8,7 @@ import { crearClienteAdmin } from '@/lib/supabase/admin';
 import { generarPdfFicha } from '@/lib/pdf-ficha';
 import { enviarCorreoInterno, escaparHtml, plantillaCorreo } from '@/lib/correo';
 import { urlSistema } from '@/config/sistema';
+import { CCI_LARGO, soloDigitos } from '@/lib/cci';
 import type { Moneda } from '@/lib/calculos';
 
 export type FichaProveedorEntrada = {
@@ -17,12 +18,14 @@ export type FichaProveedorEntrada = {
   descripcion: string;
   monto: number;
   banco: string;
-  cuentaCci: string;
+  cuenta: string;
+  cci: string;
   emailProveedor: string;
 };
 
 export type DatosEjecutivo = {
   clienteNombre: string;
+  clienteRazonSocial: string;
   clienteRuc: string;
   politicaPago: string;
   contactoAprobacion: string;
@@ -41,6 +44,7 @@ export type FacturaClienteEntrada = {
   hes: string;
   fechaEmision: string | null;
   total: number | null;
+  fee: number | null;
 };
 
 // Cada factura de un proveedor (varias por proveedor), con su moneda.
@@ -121,6 +125,7 @@ async function persistir(
     .from('fichas_apertura')
     .update({
       cliente_nombre: datos.clienteNombre.trim(),
+      cliente_razon_social: datos.clienteRazonSocial.trim(),
       cliente_ruc: datos.clienteRuc.trim(),
       politica_pago: datos.politicaPago.trim(),
       contacto_aprobacion: datos.contactoAprobacion.trim(),
@@ -152,7 +157,8 @@ async function persistir(
       descripcion: p.descripcion.trim(),
       monto: p.monto || 0,
       banco: p.banco.trim(),
-      cuenta_cci: p.cuentaCci.trim(),
+      cuenta: p.cuenta.trim(),
+      cci: soloDigitos(p.cci),
       email_proveedor: p.emailProveedor.trim(),
     }));
     const { error: errIns } = await supabase
@@ -218,6 +224,21 @@ export async function marcarListaEjecutivo(
     return {
       error: `Antes de marcar lista, completa: ${faltan.join(', ')}.`,
     };
+
+  // Cuenta y CCI son obligatorios en cada proveedor válido; el CCI debe tener
+  // exactamente 20 dígitos.
+  for (const p of provValidos) {
+    const quien =
+      p.agencia.trim() || p.influencerProveedor.trim() || 'un proveedor';
+    if (!p.cuenta.trim())
+      return { error: `Falta el número de cuenta de ${quien}.` };
+    const cci = soloDigitos(p.cci);
+    if (!cci) return { error: `Falta el CCI de ${quien}.` };
+    if (cci.length !== CCI_LARGO)
+      return {
+        error: `El CCI de ${quien} debe tener ${CCI_LARGO} dígitos (tiene ${cci.length}).`,
+      };
+  }
 
   const { error: errEstado } = await ctx.supabase
     .from('fichas_apertura')
@@ -333,7 +354,8 @@ async function persistirSeguimiento(
         f.oc.trim() ||
         f.hes.trim() ||
         f.fechaEmision ||
-        f.total != null,
+        f.total != null ||
+        f.fee != null,
     )
     .map((f, i) => ({
       ficha_id: fichaId,
@@ -343,6 +365,7 @@ async function persistirSeguimiento(
       hes: f.hes.trim(),
       fecha_emision: fechaOnull(f.fechaEmision),
       total: f.total,
+      fee: f.fee,
     }));
   if (filasC.length > 0) {
     const { error } = await supabase
@@ -452,6 +475,7 @@ async function generarYGuardarPdf(
       codigo: f.codigo as string,
       cliente: {
         nombre: (f.cliente_nombre as string) ?? '',
+        razonSocial: (f.cliente_razon_social as string) ?? '',
         ruc: (f.cliente_ruc as string) ?? '',
         politicaPago: (f.politica_pago as string) ?? '',
         contacto: (f.contacto_aprobacion as string) ?? '',
@@ -470,6 +494,7 @@ async function generarYGuardarPdf(
         hes: (x.hes as string) ?? '',
         fechaEmision: (x.fecha_emision as string | null) ?? null,
         total: x.total != null ? Number(x.total) : null,
+        fee: x.fee != null ? Number(x.fee) : null,
       })),
       proveedores: (provs ?? []).map((p) => ({
         orden: p.orden as number,
@@ -479,7 +504,8 @@ async function generarYGuardarPdf(
         descripcion: (p.descripcion as string) ?? '',
         monto: Number(p.monto) || 0,
         banco: (p.banco as string) ?? '',
-        cuentaCci: (p.cuenta_cci as string) ?? '',
+        cuenta: (p.cuenta as string) ?? '',
+        cci: (p.cci as string) ?? '',
         facturas: facturasDe(p.id as string),
       })),
     });

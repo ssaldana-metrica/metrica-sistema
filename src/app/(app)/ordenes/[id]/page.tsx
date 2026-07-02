@@ -5,6 +5,7 @@ import { uno } from '@/lib/util';
 import { OrdenEditor } from '@/components/orden/OrdenEditor';
 import type { Moneda } from '@/lib/calculos';
 import type { TipoProveedor } from '@/actions/ordenes';
+import type { TipoComprobante } from '@/config/impuestos';
 
 // Detalle/edición de una orden de adquisición. Solo admin y gerencia (RLS y
 // candado de rol); el ejecutivo no accede.
@@ -21,8 +22,9 @@ export default async function PaginaOrden({
     .from('ordenes_adquisicion')
     .select(
       `id, codigo, estado, ficha_id, agencia, influencer_proveedor, razon_social,
-       nombre_comercial, ruc, tipo_proveedor, descripcion, monto, moneda, banco,
-       cuenta_cci, email_proveedor, condiciones_pago, pdf_url, motivo_anulacion,
+       nombre_comercial, ruc, tipo_proveedor, tipo_comprobante, descripcion,
+       monto, moneda, banco, cuenta, cci, email_proveedor, condiciones_pago,
+       pdf_url, motivo_anulacion,
        ficha:fichas_apertura!inner(
          codigo, cotizacion:cotizaciones!inner(id, codigo)
        )`,
@@ -63,6 +65,8 @@ export default async function PaginaOrden({
         nombreComercial: (orden.nombre_comercial as string) ?? '',
         ruc: (orden.ruc as string) ?? '',
         tipoProveedor: (orden.tipo_proveedor as TipoProveedor) ?? 'empresa',
+        tipoComprobante:
+          (orden.tipo_comprobante as TipoComprobante) ?? 'factura',
         condicionesPago: (orden.condiciones_pago as string) ?? '',
         moneda: orden.moneda as Moneda,
         detalles: (detalles ?? []).map((x) => ({
@@ -71,7 +75,8 @@ export default async function PaginaOrden({
           precioUnitario: Number(x.precio_unitario) || 0,
         })),
         banco: (orden.banco as string) ?? '',
-        cuentaCci: (orden.cuenta_cci as string) ?? '',
+        cuenta: (orden.cuenta as string) ?? '',
+        cci: (orden.cci as string) ?? '',
         emailProveedor: (orden.email_proveedor as string) ?? '',
       }}
     />

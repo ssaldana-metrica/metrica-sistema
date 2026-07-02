@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { obtenerSesion } from '@/lib/auth';
 import { crearClienteServidor } from '@/lib/supabase/server';
+import { puedeReactivarAnulacion } from '@/config/permisos';
 import type { ControlFila } from '@/lib/control';
 
 export type CambioControl = {
@@ -71,6 +72,29 @@ export async function anularProceso(
     return { error: error.message ?? 'No se pudo anular el proceso.' };
 
   // El estado anulado se refleja en todas las pantallas afectadas.
+  revalidatePath('/control');
+  revalidatePath('/cotizaciones');
+  revalidatePath('/fichas');
+  revalidatePath('/ordenes');
+  return { ok: true };
+}
+
+// REACTIVAR PROCESO (solo gerencia y Erika): revierte la anulación en cascada.
+// Dispara la función atómica reactivar_proceso(), que restaura la cotización,
+// la ficha y las ODA a su estado previo, y devuelve sus códigos a 'en_uso'.
+export async function reactivarProceso(fichaId: string): Promise<Resultado> {
+  const sesion = await obtenerSesion();
+  if (!sesion) return { error: 'Sesión expirada. Vuelve a entrar.' };
+  if (!puedeReactivarAnulacion(sesion.usuario))
+    return { error: 'Solo Gerencia o Erika pueden reactivar un proceso anulado.' };
+
+  const supabase = await crearClienteServidor();
+  const { error } = await supabase.rpc('reactivar_proceso', {
+    p_ficha_id: fichaId,
+  });
+  if (error)
+    return { error: error.message ?? 'No se pudo reactivar el proceso.' };
+
   revalidatePath('/control');
   revalidatePath('/cotizaciones');
   revalidatePath('/fichas');
