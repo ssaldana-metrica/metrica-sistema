@@ -13,7 +13,7 @@ import {
   type TipoProveedorImp,
   type TipoComprobante,
 } from '@/config/impuestos';
-import { CLAUSULAS_ODA, INTRO_CLAUSULAS_ODA } from '@/config/oda';
+import { CLAUSULAS_ODA } from '@/config/oda';
 import { C, EncabezadoPdf, PiePdf, SelloAnulado } from '@/lib/pdf-marca';
 
 export type DatosPdfOda = {
@@ -135,15 +135,7 @@ const s = StyleSheet.create({
     padding: 9,
     borderRadius: 4,
   },
-  clausTitulo: {
-    fontSize: 8.5,
-    fontFamily: 'Helvetica-Bold',
-    color: C.navy,
-    marginTop: 7,
-    marginBottom: 2,
-  },
-  clausula: { fontSize: 8.5, color: C.navySuave, marginBottom: 4, lineHeight: 1.5 },
-  // Viñetas de indicaciones antes de las cláusulas numeradas.
+  // Viñetas de las cláusulas.
   intro: { flexDirection: 'row', marginBottom: 4 },
   introBullet: { width: 12, fontSize: 8.5, color: C.navy },
   introTexto: { flex: 1, fontSize: 8.5, color: C.navySuave, lineHeight: 1.5 },
@@ -270,20 +262,10 @@ function Documento({ d }: { d: DatosPdfOda }) {
         ) : null}
 
         <Text style={s.seccion}>Cláusulas</Text>
-        {INTRO_CLAUSULAS_ODA.map((t, i) => (
-          <View key={`intro-${i}`} style={s.intro} wrap={false}>
+        {CLAUSULAS_ODA.map((t, i) => (
+          <View key={i} style={s.intro} wrap={false}>
             <Text style={s.introBullet}>•</Text>
             <Text style={s.introTexto}>{t}</Text>
-          </View>
-        ))}
-        {CLAUSULAS_ODA.map((sec, i) => (
-          <View key={i} wrap={false}>
-            <Text style={s.clausTitulo}>{sec.titulo}</Text>
-            {sec.items.map((it, j) => (
-              <Text key={j} style={s.clausula}>
-                {it}
-              </Text>
-            ))}
           </View>
         ))}
 

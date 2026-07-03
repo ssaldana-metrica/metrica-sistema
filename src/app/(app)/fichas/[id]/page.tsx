@@ -158,8 +158,9 @@ export default async function PaginaFicha({
         id: p.id as string,
         orden: p.orden as number,
         etiqueta:
-          (p.agencia as string) ||
-          (p.influencer_proveedor as string) ||
+          [p.agencia as string, p.influencer_proveedor as string]
+            .filter((x) => x && x.trim())
+            .join(' - ') ||
           (p.descripcion as string) ||
           `Proveedor ${p.orden as number}`,
         facturas: facturasDe(p.id as string),
