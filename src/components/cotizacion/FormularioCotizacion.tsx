@@ -139,14 +139,20 @@ export function FormularioCotizacion({
         <div>
           <h1 className="text-lg font-bold tracking-tight">
             {inicial ? 'Editar cotización' : 'Nueva cotización'}{' '}
-            <span className="ml-2 font-mono text-[15px] text-petroleo-oscuro">
-              {codigo}
-            </span>
+            {codigo ? (
+              <span className="ml-2 font-mono text-[15px] text-petroleo-oscuro">
+                {codigo}
+              </span>
+            ) : (
+              <span className="ml-2 text-[12.5px] font-normal text-tinta-tenue">
+                · el código se asigna al guardar
+              </span>
+            )}
           </h1>
           <p className="mt-0.5 text-[13px] text-tinta-tenue">
             {inicial?.estado === 'observada'
               ? 'Corrige lo observado y reenvía — el código se conserva.'
-              : 'Llena los datos y envía a aprobación.'}
+              : 'Llena los datos y guarda: el banco le asignará el código correlativo.'}
           </p>
         </div>
         <div className="flex gap-2.5">

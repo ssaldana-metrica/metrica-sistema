@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { obtenerSesion } from '@/lib/auth';
 import { crearClienteServidor } from '@/lib/supabase/server';
 import { uno } from '@/lib/util';
@@ -62,13 +63,23 @@ export default async function PaginaBanco() {
 
   return (
     <div>
-      <div className="mb-5 flex items-end justify-between">
+      <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-lg font-bold tracking-tight">Banco de códigos</h1>
           <p className="mt-0.5 text-[13px] text-tinta-tenue">
             Año {anio} · {disponibles} disponibles de {celdas.length}
           </p>
         </div>
+        <Link
+          href="/cotizaciones/nueva"
+          className="flex items-center gap-1.5 rounded-lg bg-petroleo px-3.5 py-2 text-[12.5px] font-semibold text-white transition hover:bg-petroleo-oscuro"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5">
+            <line x1="12" y1="5" x2="12" y2="19" />
+            <line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
+          Nueva cotización
+        </Link>
         <div className="flex gap-4 text-xs text-tinta-suave">
           <span className="flex items-center gap-1.5">
             <span className="h-[11px] w-[11px] rounded border border-dashed border-petroleo bg-petroleo/20" />
@@ -98,9 +109,10 @@ export default async function PaginaBanco() {
           <line x1="12" y1="8" x2="12.01" y2="8" />
         </svg>
         <div>
-          El banco entrega un código correlativo a cada cotización. Varios
-          ejecutivos pueden tomar códigos al mismo tiempo sin pisarse. Un
-          código anulado se queda anulado — nunca se reutiliza.
+          El código correlativo se asigna al <b>guardar</b> la cotización (no se
+          reserva antes), así el banco no deja huecos. Varios ejecutivos pueden
+          cotizar a la vez sin pisarse — nunca se duplica. Un código anulado se
+          queda anulado.
         </div>
       </div>
 

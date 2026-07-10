@@ -1,7 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
-import { tomarCodigo } from '@/actions/codigos';
+import { useState } from 'react';
 import { BadgeEstado } from '@/components/ui/BadgeEstado';
 
 export type CeldaCodigo = {
@@ -20,21 +19,6 @@ export type CeldaCodigo = {
 
 export function RejillaCodigos({ celdas }: { celdas: CeldaCodigo[] }) {
   const [detalle, setDetalle] = useState<CeldaCodigo | null>(null);
-  const [confirmar, setConfirmar] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [tomando, startTransition] = useTransition();
-
-  function tomar() {
-    setError(null);
-    startTransition(async () => {
-      const r = await tomarCodigo();
-      // Si todo va bien, tomarCodigo redirige y esta línea nunca corre.
-      if (r?.error) {
-        setError(r.error);
-        setConfirmar(null);
-      }
-    });
-  }
 
   return (
     <>
@@ -42,18 +26,17 @@ export function RejillaCodigos({ celdas }: { celdas: CeldaCodigo[] }) {
         {celdas.map((c) => {
           if (c.estado === 'disponible') {
             return (
-              <button
+              <div
                 key={c.codigo}
-                onClick={() => setConfirmar(c.codigo)}
-                className="rounded-[10px] border border-dashed border-petroleo/40 bg-white p-3 text-left transition hover:-translate-y-0.5 hover:border-petroleo hover:bg-verde-fondo hover:shadow-tarjeta"
+                className="rounded-[10px] border border-dashed border-petroleo/30 bg-white p-3"
               >
                 <div className="font-mono text-[12.5px] font-semibold text-petroleo-oscuro">
                   {c.codigo}
                 </div>
                 <div className="mt-1 text-[10.5px] text-tinta-tenue">
-                  Disponible · clic para usar
+                  Disponible
                 </div>
-              </button>
+              </div>
             );
           }
           if (c.estado === 'anulado') {
@@ -91,43 +74,6 @@ export function RejillaCodigos({ celdas }: { celdas: CeldaCodigo[] }) {
           );
         })}
       </div>
-
-      {error && (
-        <div className="mt-5 rounded-[10px] border border-rojo/30 bg-rojo-fondo px-4 py-3 text-[13px] text-rojo">
-          {error}
-        </div>
-      )}
-
-      {/* Confirmación para tomar un código disponible */}
-      {confirmar && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-lateral/45 p-6">
-          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-flotante">
-            <h3 className="text-[15px] font-bold">Tomar código del banco</h3>
-            <p className="mt-2 text-[13px] leading-relaxed text-tinta-suave">
-              Se abrirá una nueva cotización. El banco entregará el primer
-              código disponible (puede no ser exactamente{' '}
-              <span className="font-mono font-semibold">{confirmar}</span> si
-              alguien lo toma en este instante — nunca se duplican).
-            </p>
-            <div className="mt-5 flex justify-end gap-2.5">
-              <button
-                onClick={() => setConfirmar(null)}
-                disabled={tomando}
-                className="rounded-lg border border-linea bg-white px-4 py-2 text-[13px] font-semibold transition hover:bg-superficie"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={tomar}
-                disabled={tomando}
-                className="rounded-lg bg-petroleo px-4 py-2 text-[13px] font-semibold text-white transition hover:bg-petroleo-oscuro disabled:opacity-60"
-              >
-                {tomando ? 'Tomando…' : 'Tomar y cotizar'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Detalle de un código en uso o anulado */}
       {detalle && (

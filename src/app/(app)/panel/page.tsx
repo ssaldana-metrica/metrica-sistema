@@ -72,7 +72,7 @@ export default async function Panel() {
         <div className="flex items-center justify-between border-b border-linea-suave px-5 py-4">
           <h2 className="text-[14.5px] font-bold">Actividad reciente</h2>
           <Link
-            href="/banco"
+            href="/cotizaciones/nueva"
             className="rounded-lg bg-petroleo px-3.5 py-2 text-[12.5px] font-semibold text-white transition hover:bg-petroleo-oscuro"
           >
             + Nueva cotización

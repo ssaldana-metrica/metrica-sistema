@@ -114,17 +114,23 @@ export async function guardarCotizacion(
     }
   }
 
-  // ¿Ya existe una cotización con este código? (el RLS solo muestra la propia)
-  const { data: existente } = await supabase
-    .from('cotizaciones')
-    .select('id, estado')
-    .eq('codigo', entrada.codigo)
-    .maybeSingle();
+  // Editar una existente (borrador/observada) exige su código; una nueva NO
+  // trae código: el banco se lo asigna al crearla (correlativo estricto).
+  const esNueva = !entrada.codigo?.trim();
 
-  if (existente && !['borrador', 'observada'].includes(existente.estado)) {
-    return {
-      error: `Esta cotización ya está en estado "${existente.estado}" y no se puede editar.`,
-    };
+  let existente: { id: string; estado: string } | null = null;
+  if (!esNueva) {
+    const { data } = await supabase
+      .from('cotizaciones')
+      .select('id, estado')
+      .eq('codigo', entrada.codigo)
+      .maybeSingle();
+    existente = (data as { id: string; estado: string } | null) ?? null;
+    if (!existente) return { error: 'No se encontró la cotización a editar.' };
+    if (!['borrador', 'observada'].includes(existente.estado))
+      return {
+        error: `Esta cotización ya está en estado "${existente.estado}" y no se puede editar.`,
+      };
   }
 
   const campos = {
@@ -156,22 +162,27 @@ export async function guardarCotizacion(
     if (errorBorrado)
       return { error: 'No se pudieron actualizar las líneas. Intenta de nuevo.' };
   } else {
-    const { data, error } = await supabase
-      .from('cotizaciones')
-      .insert({
-        codigo: entrada.codigo,
-        ejecutivo_id: sesion.usuario.id,
-        ...campos,
-        estado: 'borrador',
-      })
-      .select('id')
-      .single();
-    if (error || !data)
+    // Nueva: el banco entrega el correlativo y crea la cotización en la MISMA
+    // transacción → sin duplicados y sin huecos por borradores abandonados.
+    const { data: creada, error } = await supabase.rpc('crear_cotizacion', {
+      p_cliente_id: clienteId,
+      p_proyecto: entrada.proyecto.trim(),
+      p_moneda: entrada.moneda,
+      p_fee_porcentaje: entrada.feePorcentaje,
+      p_fecha_envio: entrada.fechaEnvioCliente || null,
+    });
+    if (error)
       return {
-        error:
-          'No se pudo crear la cotización. Verifica que el código del banco sea tuyo.',
+        error: error.message?.includes('disponibles')
+          ? 'No hay códigos disponibles para este año. Pide a administración generar más.'
+          : 'No se pudo crear la cotización. Intenta de nuevo.',
       };
-    id = data.id;
+    const fila = (Array.isArray(creada) ? creada[0] : creada) as
+      | { cot_id: string; cot_codigo: string }
+      | undefined;
+    if (!fila?.cot_id)
+      return { error: 'No se pudo crear la cotización. Intenta de nuevo.' };
+    id = fila.cot_id;
   }
 
   const filas = entrada.lineas.map((l, i) => ({

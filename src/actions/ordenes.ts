@@ -4,7 +4,6 @@ import { revalidatePath } from 'next/cache';
 import { obtenerSesion } from '@/lib/auth';
 import { crearClienteServidor } from '@/lib/supabase/server';
 import { crearClienteAdmin } from '@/lib/supabase/admin';
-import { uno } from '@/lib/util';
 import { generarPdfOda } from '@/lib/pdf-oda';
 import { redondear, type Moneda } from '@/lib/calculos';
 import type { TipoProveedorImp, TipoComprobante } from '@/config/impuestos';
@@ -42,10 +41,10 @@ type ResultadoGenerar =
   | { ok: true; id: string; yaExistia: boolean }
   | { error: string };
 
-// GENERAR ODA (solo admin/gerencia): desde una ficha COMPLETA, crea la orden
-// de un proveedor heredando sus datos. Toma un código del banco ODA de forma
-// atómica. Si el proveedor ya tiene una orden, devuelve la existente (no
-// duplica: ficha_proveedor_id es único).
+// GENERAR ODA (solo admin/gerencia): asigna el código ODA y crea la orden del
+// proveedor (heredando sus datos y su primera línea) en UNA sola transacción.
+// Correlativo estricto, sin duplicados y sin fuga si algo falla. Si el proveedor
+// ya tiene orden, devuelve la existente (ficha_proveedor_id es único).
 export async function generarOda(
   fichaProveedorId: string,
 ): Promise<ResultadoGenerar> {
@@ -55,93 +54,24 @@ export async function generarOda(
     return { error: 'Solo administración puede generar órdenes.' };
 
   const supabase = await crearClienteServidor();
-
-  // Proveedor + su ficha + el código de la cotización de origen.
-  const { data: prov } = await supabase
-    .from('ficha_proveedores')
-    .select(
-      `id, ficha_id, agencia, influencer_proveedor, ruc, descripcion, monto,
-       banco, cuenta, cci, email_proveedor,
-       ficha:fichas_apertura!inner(
-         estado, moneda, cotizacion:cotizaciones!inner(codigo)
-       )`,
-    )
-    .eq('id', fichaProveedorId)
-    .maybeSingle();
-  if (!prov) return { error: 'No se encontró el proveedor de la ficha.' };
-
-  const ficha = uno(
-    prov.ficha as {
-      estado: string;
-      moneda: string;
-      cotizacion: { codigo: string }[];
-    }[] | null,
-  );
-  // Se puede generar en cuanto el ejecutivo marca su parte lista (no hace falta
-  // cerrar la ficha ni generar su PDF).
-  if (!['lista_ejecutivo', 'completa'].includes(ficha?.estado ?? ''))
-    return {
-      error:
-        'Genera la orden cuando el ejecutivo haya marcado su parte como lista.',
-    };
-
-  // ¿Ya tiene orden? No duplicar.
-  const { data: existente } = await supabase
-    .from('ordenes_adquisicion')
-    .select('id')
-    .eq('ficha_proveedor_id', fichaProveedorId)
-    .maybeSingle();
-  if (existente)
-    return { ok: true, id: existente.id as string, yaExistia: true };
-
-  // Toma un código ODA de forma atómica (la función valida el rol).
-  const { data: cod, error: errCod } = await supabase.rpc('tomar_codigo_oda');
-  if (errCod || !cod)
-    return {
-      error:
-        errCod?.message ?? 'No se pudo asignar un código ODA. Intenta de nuevo.',
-    };
-  const codigo = (Array.isArray(cod) ? cod[0]?.codigo : cod?.codigo) as string;
-
-  const cotCodigo = uno(ficha?.cotizacion ?? null)?.codigo ?? '';
-
-  const { data: orden, error } = await supabase
-    .from('ordenes_adquisicion')
-    .insert({
-      codigo,
-      ficha_id: prov.ficha_id as string,
-      ficha_proveedor_id: prov.id as string,
-      cotizacion_codigo: cotCodigo,
-      agencia: (prov.agencia as string) ?? '',
-      influencer_proveedor: (prov.influencer_proveedor as string) ?? '',
-      ruc: (prov.ruc as string) ?? '',
-      descripcion: (prov.descripcion as string) ?? '',
-      monto: Number(prov.monto) || 0,
-      moneda: ficha?.moneda ?? 'PEN',
-      banco: (prov.banco as string) ?? '',
-      cuenta: (prov.cuenta as string) ?? '',
-      cci: (prov.cci as string) ?? '',
-      email_proveedor: (prov.email_proveedor as string) ?? '',
-    })
-    .select('id')
-    .single();
-  if (error || !orden)
-    return { error: 'No se pudo crear la orden. Intenta de nuevo.' };
-
-  // Primera línea de detalle, heredada del proveedor (editable después):
-  // cantidad 1, precio unitario = monto heredado, total = ese mismo monto.
-  await supabase.from('orden_detalles').insert({
-    orden_id: orden.id as string,
-    posicion: 1,
-    descripcion: (prov.descripcion as string) ?? '',
-    cantidad: 1,
-    precio_unitario: Number(prov.monto) || 0,
-    monto: Number(prov.monto) || 0,
+  const { data, error } = await supabase.rpc('generar_oda', {
+    p_ficha_proveedor_id: fichaProveedorId,
   });
+  if (error)
+    return {
+      error: error.message?.includes('disponibles')
+        ? 'No hay códigos ODA disponibles para este año. Pide a administración generar más.'
+        : error.message ?? 'No se pudo generar la orden. Intenta de nuevo.',
+    };
+  const fila = (Array.isArray(data) ? data[0] : data) as
+    | { oda_id: string; oda_ficha_id: string; ya_existia: boolean }
+    | undefined;
+  if (!fila?.oda_id)
+    return { error: 'No se pudo generar la orden. Intenta de nuevo.' };
 
-  revalidatePath(`/fichas/${prov.ficha_id as string}`);
+  revalidatePath(`/fichas/${fila.oda_ficha_id}`);
   revalidatePath('/ordenes');
-  return { ok: true, id: orden.id as string, yaExistia: false };
+  return { ok: true, id: fila.oda_id, yaExistia: fila.ya_existia };
 }
 
 type Resultado = { ok: true } | { error: string };
