@@ -208,12 +208,12 @@ export default async function PaginaCotizaciones({
           descripcion={
             buscado || estado
               ? 'Ninguna cotización coincide con el filtro. Prueba con otros términos.'
-              : 'Toma un código del banco y crea la primera cotización.'
+              : 'Crea la primera cotización — el banco le asigna el código al guardar.'
           }
           accion={
             buscado || estado
               ? undefined
-              : { href: '/banco', etiqueta: 'Ir al banco de códigos' }
+              : { href: '/cotizaciones/nueva', etiqueta: 'Nueva cotización' }
           }
         />
       )}

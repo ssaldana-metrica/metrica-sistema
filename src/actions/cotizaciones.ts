@@ -142,6 +142,9 @@ export async function guardarCotizacion(
   };
 
   let id: string;
+  // Para una nueva, el código real lo asigna el banco al crearla; para una
+  // edición, ya viene en entrada.codigo. Se usa en el aviso a administración.
+  let codigoAsignado = entrada.codigo;
 
   // IMPORTANTE: las líneas se guardan ANTES de pasar a 'pendiente'.
   // El candado RLS solo permite tocar líneas de una cotización en
@@ -183,6 +186,7 @@ export async function guardarCotizacion(
     if (!fila?.cot_id)
       return { error: 'No se pudo crear la cotización. Intenta de nuevo.' };
     id = fila.cot_id;
+    codigoAsignado = fila.cot_codigo;
   }
 
   const filas = entrada.lineas.map((l, i) => ({
@@ -215,7 +219,7 @@ export async function guardarCotizacion(
 
     // Aviso interno a administración (después de responder, para no
     // frenar la pantalla; si el correo falla, el envío no se afecta).
-    const codigo = entrada.codigo;
+    const codigo = codigoAsignado;
     const ejecutivo = sesion.usuario.nombre;
     const totales = calcularTotales(
       entrada.lineas.map((l) => ({
