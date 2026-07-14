@@ -2,7 +2,8 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { cambiarActivo, cambiarRol, ROLES, type Rol } from '@/actions/usuarios';
+import { cambiarActivo, cambiarRol } from '@/actions/usuarios';
+import { ROLES, type Rol } from '@/lib/roles';
 import { useToast } from '@/components/ui/Toast';
 
 export type UsuarioFila = {

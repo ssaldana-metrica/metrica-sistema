@@ -3,11 +3,9 @@
 import { revalidatePath } from 'next/cache';
 import { obtenerSesion } from '@/lib/auth';
 import { crearClienteServidor } from '@/lib/supabase/server';
+import { ROLES, type Rol } from '@/lib/roles';
 
 type Resultado = { ok: true } | { error: string };
-
-export const ROLES = ['ejecutivo', 'admin', 'gerencia'] as const;
-export type Rol = (typeof ROLES)[number];
 
 // Cambia el rol de un usuario. Solo gerencia. No puedes cambiar el tuyo (para
 // no dejarte a ti mismo sin acceso por error).

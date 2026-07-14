@@ -4,7 +4,7 @@ import {
   TablaUsuarios,
   type UsuarioFila,
 } from '@/components/usuarios/TablaUsuarios';
-import type { Rol } from '@/actions/usuarios';
+import type { Rol } from '@/lib/roles';
 
 export default async function PaginaUsuarios() {
   const sesion = await exigirRol(['gerencia']);
