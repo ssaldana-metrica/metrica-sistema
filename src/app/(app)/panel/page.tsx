@@ -129,8 +129,8 @@ export default async function Panel() {
                   colSpan={6}
                   className="px-5 py-8 text-center text-[13px] text-tinta-tenue"
                 >
-                  Aún no hay cotizaciones. Toma un código del banco para
-                  empezar.
+                  Aún no hay cotizaciones. Crea la primera con “+ Nueva
+                  cotización”.
                 </td>
               </tr>
             )}
