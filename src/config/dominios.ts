@@ -2,7 +2,7 @@
 // Para agregar un dominio del grupo, añádelo a esta lista y despliega.
 export const DOMINIOS_PERMITIDOS = [
   'metrica.pe',
-  'metrica.com.pe',
+  'metricaperu.com',
 ];
 
 export function dominioPermitido(correo: string): boolean {

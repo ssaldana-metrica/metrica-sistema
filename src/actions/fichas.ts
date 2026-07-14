@@ -265,7 +265,7 @@ export async function marcarListaEjecutivo(
         admin
           .from('usuarios')
           .select('correo')
-          .in('rol', ['admin', 'gerencia'])
+          .eq('rol', 'admin') // gerencia no recibe correos operativos
           .eq('activo', true),
       ]);
       const correos = (admins ?? []).map((a) => a.correo as string);

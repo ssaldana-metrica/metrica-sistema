@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { obtenerSesion } from '@/lib/auth';
 import { crearClienteServidor } from '@/lib/supabase/server';
+import { crearClienteAdmin } from '@/lib/supabase/admin';
 import { cerrarSesion } from '@/actions/auth';
 import { type GrupoNav } from '@/components/shell/Sidebar';
 import { Shell } from '@/components/shell/Shell';
@@ -20,8 +21,16 @@ export default async function LayoutProtegido({
   if (!sesion) {
     const supabase = await crearClienteServidor();
     const { data: { user } } = await supabase.auth.getUser();
-    if (user) redirect('/acceso-denegado?motivo=inactivo');
-    redirect('/login');
+    if (!user?.email) redirect('/login');
+    // Distingue "aún sin rol" (elige) de "dado de baja" (denegado).
+    const admin = crearClienteAdmin();
+    const { data: fila } = await admin
+      .from('usuarios')
+      .select('activo')
+      .eq('correo', user.email.toLowerCase())
+      .maybeSingle();
+    if (!fila) redirect('/elegir-rol');
+    redirect('/acceso-denegado?motivo=inactivo');
   }
 
   const { usuario } = sesion;

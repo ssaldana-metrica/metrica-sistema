@@ -4,9 +4,9 @@ import { crearClienteAdmin } from "@/lib/supabase/admin";
 import { dominioPermitido } from "@/config/dominios";
 
 // Vuelta de Google. Aquí se decide quién entra:
-// 1. Dominio fuera de la lista        → acceso denegado.
-// 2. Usuario dado de baja (activo=false) → acceso denegado.
-// 3. Correo de dominio válido sin registro → se crea como 'ejecutivo'.
+// 1. Dominio fuera de la lista            → acceso denegado.
+// 2. Usuario dado de baja (activo=false)  → acceso denegado.
+// 3. Correo de dominio válido sin registro → elige su rol (admin/ejecutivo).
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
@@ -33,18 +33,10 @@ export async function GET(request: Request) {
     .maybeSingle();
 
   if (!usuario) {
-    const nombre =
-      (data.user.user_metadata?.full_name as string | undefined) ??
-      (data.user.user_metadata?.name as string | undefined) ??
-      correo.split("@")[0];
-    const { error: errorAlta } = await admin
-      .from("usuarios")
-      .insert({ nombre, correo, rol: "ejecutivo" });
-    if (errorAlta) {
-      await supabase.auth.signOut();
-      return NextResponse.redirect(`${origin}/acceso-denegado?motivo=error`);
-    }
-  } else if (!usuario.activo) {
+    // Primer ingreso: aún no tiene rol. Elige entre Administración y Ejecutivo.
+    return NextResponse.redirect(`${origin}/elegir-rol`);
+  }
+  if (!usuario.activo) {
     await supabase.auth.signOut();
     return NextResponse.redirect(`${origin}/acceso-denegado?motivo=inactivo`);
   }
