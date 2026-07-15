@@ -10,6 +10,7 @@ import {
   VistaCotizacion,
   type CotizacionDetalle,
 } from '@/components/cotizacion/VistaCotizacion';
+import { BotonReabrirCotizacion } from '@/components/cotizacion/BotonReabrirCotizacion';
 import type { Moneda } from '@/lib/calculos';
 
 // Detalle de una cotización: editable para su ejecutivo mientras esté en
@@ -48,9 +49,15 @@ export default async function DetalleCotizacion({
     .map((i) => i as Record<string, unknown>)
     .sort((a, b) => (a.orden as number) - (b.orden as number));
 
+  const esAdmin = ['admin', 'gerencia'].includes(sesion.usuario.rol);
+  // Administración también puede editar una cotización editable (además del
+  // ejecutivo dueño), p. ej. tras reabrir una aprobada.
   const editable =
-    cot.ejecutivo_id === sesion.usuario.id &&
+    (cot.ejecutivo_id === sesion.usuario.id || esAdmin) &&
     ['borrador', 'observada'].includes(cot.estado as string);
+  const ownerNombre =
+    uno(cot.ejecutivo as { nombre: string }[] | null)?.nombre ??
+    sesion.usuario.nombre;
 
   if (editable) {
     const [{ data: clientes }, { data: proveedores }] = await Promise.all([
@@ -89,7 +96,7 @@ export default async function DetalleCotizacion({
         )}
         <FormularioCotizacion
           codigo={cot.codigo as string}
-          ejecutivoNombre={sesion.usuario.nombre}
+          ejecutivoNombre={ownerNombre}
           clientes={(clientes ?? []).map((c) => ({
             id: c.id as string,
             nombre: c.nombre_comercial as string,
@@ -156,6 +163,9 @@ export default async function DetalleCotizacion({
         <div className="mb-5 rounded-[10px] border border-verde/30 bg-verde-fondo p-3.5 text-[12.5px] font-medium text-verde">
           Borrador guardado.
         </div>
+      )}
+      {esAdmin && cot.estado === 'aprobada' && (
+        <BotonReabrirCotizacion id={id} />
       )}
       <VistaCotizacion
         cot={detalle}

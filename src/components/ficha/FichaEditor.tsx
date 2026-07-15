@@ -617,9 +617,16 @@ export function FichaEditor(props: FichaEditorProps) {
                       <td className="px-1 py-1">
                         <input
                           value={p.ruc}
+                          inputMode="numeric"
                           disabled={!editable}
-                          onChange={(e) => fijarProv(i, 'ruc', e.target.value)}
-                          className={celdaCls}
+                          onChange={(e) =>
+                            fijarProv(
+                              i,
+                              'ruc',
+                              soloDigitos(e.target.value).slice(0, 11),
+                            )
+                          }
+                          className={`${celdaCls} font-mono`}
                         />
                       </td>
                       <td className="px-1 py-1">
@@ -927,7 +934,7 @@ export function FichaEditor(props: FichaEditorProps) {
                             )}
                           </div>
                           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                            <Campo label="N° OC">
+                            <Campo label="N° ODA">
                               <input
                                 value={f.numOc}
                                 disabled={!adminEditable}

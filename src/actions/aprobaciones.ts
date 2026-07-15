@@ -191,6 +191,59 @@ export async function aprobarCotizacion(id: string): Promise<ResultadoAprobar> {
   };
 }
 
+// REABRIR (solo admin/gerencia): una cotización YA APROBADA vuelve a ser
+// editable. Regresa a 'observada' (conserva su código), se le avisa por correo
+// al ejecutivo dueño, y el PDF/aprobación quedan obsoletos (se regeneran al
+// reaprobar). El ejecutivo la edita y reenvía; administración también puede.
+export async function reabrirCotizacion(
+  id: string,
+): Promise<{ ok: true } | { error: string }> {
+  const { usuario } = await exigirRol(['admin', 'gerencia']);
+  const supabase = await crearClienteServidor();
+  const { data: cot } = await supabase
+    .from('cotizaciones')
+    .select(
+      `id, codigo, estado, cliente:clientes(nombre_comercial),
+       ejecutivo:usuarios!cotizaciones_ejecutivo_id_fkey(nombre, correo)`,
+    )
+    .eq('id', id)
+    .maybeSingle();
+  if (!cot) return { error: 'No se encontró la cotización.' };
+  if (cot.estado !== 'aprobada')
+    return { error: 'Solo se puede reabrir una cotización aprobada.' };
+
+  const { error } = await supabase
+    .from('cotizaciones')
+    .update({
+      estado: 'observada',
+      observacion_admin: `Reabierta por ${usuario.nombre} para modificar y reenviar a aprobación.`,
+      aprobada_por: null,
+      fecha_aprobacion: null,
+      pdf_url: null,
+    })
+    .eq('id', id)
+    .eq('estado', 'aprobada');
+  if (error) return { error: 'No se pudo reabrir la cotización.' };
+
+  const eje = uno(cot.ejecutivo as { nombre: string; correo: string }[] | null);
+  const cliente = uno(cot.cliente as { nombre_comercial: string }[] | null);
+  if (eje?.correo) {
+    await enviarCorreoInterno({
+      para: eje.correo,
+      asunto: `↩ ${cot.codigo} reabierta · ${cliente?.nombre_comercial ?? ''}`,
+      html: plantillaCorreo(
+        `Cotización ${cot.codigo} reabierta`,
+        `<p style="font-size:13px;">Hola ${escaparHtml(eje.nombre.split(' ')[0])},</p>
+         <p style="font-size:13px;">${escaparHtml(usuario.nombre)} reabrió tu cotización de <b>${escaparHtml(cliente?.nombre_comercial ?? '')}</b> (estaba aprobada). Edítala y reenvíala a aprobación — conserva el mismo código.</p>
+         <p style="margin:14px 0 0;"><a href="${urlSistema()}/cotizaciones/${id}" style="display:inline-block;background:#0E7C66;color:#fff;text-decoration:none;font-size:13px;font-weight:bold;padding:9px 16px;border-radius:8px;">Abrir la cotización →</a></p>`,
+      ),
+    });
+  }
+
+  refrescarVistas();
+  return { ok: true };
+}
+
 // OBSERVAR: pide el texto, devuelve la cotización al ejecutivo (estado
 // 'observada', conserva su código) y le avisa por correo interno.
 export async function observarCotizacion(
