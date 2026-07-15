@@ -29,6 +29,24 @@ const limpiar = (v?: string) =>
     ? v.trim()
     : undefined;
 
+// Arma el remitente tolerando errores típicos al escribir CORREO_REMITENTE:
+// comillas de más ("Métrica <x@y>"), sin los <>, o solo el correo. Extrae el
+// correo dentro del texto y usa lo anterior como nombre. Si no hay correo
+// válido, cae al remitente de pruebas para no romper el envío.
+function remitenteValido(): string {
+  const fallback = 'Metrica Sistema <onboarding@resend.dev>';
+  const raw = limpiar(process.env.CORREO_REMITENTE);
+  if (!raw) return fallback;
+  const limpio = raw.replace(/^["']([\s\S]*)["']$/, '$1').trim();
+  const email = limpio.match(/[^\s<>@]+@[^\s<>]+/)?.[0];
+  if (!email) return fallback;
+  const nombre = limpio
+    .slice(0, limpio.indexOf(email))
+    .replace(/[<>"']/g, '')
+    .trim();
+  return nombre ? `${nombre} <${email}>` : email;
+}
+
 export async function enviarCorreoInterno({
   para,
   asunto,
@@ -63,9 +81,7 @@ export async function enviarCorreoInterno({
   try {
     const resend = new Resend(llave);
     const { error } = await resend.emails.send({
-      from:
-        limpiar(process.env.CORREO_REMITENTE) ??
-        'Métrica Sistema <onboarding@resend.dev>',
+      from: remitenteValido(),
       to: destino,
       subject: asunto,
       html: cuerpo,
