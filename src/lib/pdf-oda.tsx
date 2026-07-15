@@ -43,55 +43,55 @@ export type DatosPdfOda = {
 
 const s = StyleSheet.create({
   pagina: {
-    paddingTop: 42,
-    paddingBottom: 56,
-    paddingHorizontal: 44,
-    fontSize: 9.5,
+    paddingTop: 30,
+    paddingBottom: 38,
+    paddingHorizontal: 40,
+    fontSize: 9,
     fontFamily: 'Helvetica',
     color: C.tinta,
-    lineHeight: 1.45,
+    lineHeight: 1.3,
   },
   seccion: {
-    fontSize: 8,
+    fontSize: 7.8,
     fontFamily: 'Helvetica-Bold',
     color: C.navy,
     textTransform: 'uppercase',
     letterSpacing: 0.7,
-    marginTop: 16,
-    marginBottom: 7,
+    marginTop: 9,
+    marginBottom: 4,
   },
   rejilla: { flexDirection: 'row', flexWrap: 'wrap' },
-  dato: { width: '50%', marginBottom: 7, paddingRight: 12 },
-  datoK: { fontSize: 7.5, color: C.gris, textTransform: 'uppercase', letterSpacing: 0.5 },
-  datoV: { fontSize: 9.5, color: C.navy, marginTop: 2, fontFamily: 'Helvetica-Bold' },
-  parrafo: { fontSize: 9.5, marginBottom: 4, color: C.tinta },
+  dato: { width: '50%', marginBottom: 4, paddingRight: 12 },
+  datoK: { fontSize: 7, color: C.gris, textTransform: 'uppercase', letterSpacing: 0.5 },
+  datoV: { fontSize: 9, color: C.navy, marginTop: 1.5, fontFamily: 'Helvetica-Bold' },
+  parrafo: { fontSize: 9, marginBottom: 3, color: C.tinta, textAlign: 'justify' },
   mono: { fontFamily: 'Courier' },
   tabla: { borderWidth: 1, borderColor: C.linea, borderRadius: 5, overflow: 'hidden' },
   filaCab: { flexDirection: 'row', backgroundColor: C.fondoCab },
   fila: { flexDirection: 'row', borderTopWidth: 1, borderTopColor: C.linea },
   cab: {
-    fontSize: 7.5,
+    fontSize: 7.2,
     fontFamily: 'Helvetica-Bold',
     color: '#FFFFFF',
     textTransform: 'uppercase',
     letterSpacing: 0.4,
-    paddingVertical: 7,
+    paddingVertical: 5,
     paddingHorizontal: 8,
   },
-  celda: { paddingVertical: 7, paddingHorizontal: 8, fontSize: 8.5 },
+  celda: { paddingVertical: 5, paddingHorizontal: 8, fontSize: 8.5 },
   cNro: { width: '7%', textAlign: 'center', color: C.grisClaro },
   cDesc: { width: '45%' },
   cCant: { width: '12%', textAlign: 'right', fontFamily: 'Courier' },
   cUnit: { width: '18%', textAlign: 'right', fontFamily: 'Courier' },
   cMonto: { width: '18%', textAlign: 'right', fontFamily: 'Courier' },
   // Detalle de facturación (a nombre de quién factura el proveedor)
-  factNota: { fontSize: 8, color: C.gris, marginBottom: 5 },
+  factNota: { fontSize: 8, color: C.gris, marginBottom: 3 },
   factTabla: { borderWidth: 1, borderColor: C.linea, borderRadius: 5, overflow: 'hidden' },
   factFila: { flexDirection: 'row', borderTopWidth: 1, borderTopColor: C.linea },
   factK: {
     width: '24%',
     backgroundColor: C.fondoTotal,
-    paddingVertical: 7,
+    paddingVertical: 5,
     paddingHorizontal: 8,
     fontSize: 8,
     fontFamily: 'Helvetica-Bold',
@@ -99,19 +99,19 @@ const s = StyleSheet.create({
   },
   factV: {
     width: '76%',
-    paddingVertical: 7,
+    paddingVertical: 5,
     paddingHorizontal: 8,
-    fontSize: 9.5,
+    fontSize: 9,
     fontFamily: 'Helvetica-Bold',
     color: C.navy,
   },
   // Totales
-  totales: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 12 },
+  totales: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 8 },
   caja: { width: 250 },
   filaTot: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: 4,
+    paddingVertical: 3,
     paddingHorizontal: 4,
   },
   totK: { fontSize: 9, color: C.gris },
@@ -121,24 +121,22 @@ const s = StyleSheet.create({
     justifyContent: 'space-between',
     backgroundColor: C.fondoTotal,
     borderRadius: 5,
-    paddingVertical: 9,
+    paddingVertical: 7,
     paddingHorizontal: 10,
-    marginTop: 5,
+    marginTop: 4,
   },
-  gtK: { fontSize: 12, fontFamily: 'Helvetica-Bold', color: C.navy },
-  gtV: { fontSize: 13, fontFamily: 'Courier', color: C.navy },
-  nota: {
-    marginTop: 10,
-    backgroundColor: C.ambarFondo,
-    color: C.ambarTexto,
-    fontSize: 8.5,
-    padding: 9,
-    borderRadius: 4,
+  gtK: { fontSize: 11, fontFamily: 'Helvetica-Bold', color: C.navy },
+  gtV: { fontSize: 12, fontFamily: 'Courier', color: C.navy },
+  // Viñetas de las cláusulas (texto justificado).
+  intro: { flexDirection: 'row', marginBottom: 2.5 },
+  introBullet: { width: 11, fontSize: 8, color: C.navy },
+  introTexto: {
+    flex: 1,
+    fontSize: 8,
+    color: C.navySuave,
+    lineHeight: 1.3,
+    textAlign: 'justify',
   },
-  // Viñetas de las cláusulas.
-  intro: { flexDirection: 'row', marginBottom: 4 },
-  introBullet: { width: 12, fontSize: 8.5, color: C.navy },
-  introTexto: { flex: 1, fontSize: 8.5, color: C.navySuave, lineHeight: 1.5 },
 });
 
 const fechaLarga = (iso: string | null) =>
@@ -246,13 +244,6 @@ function Documento({ d }: { d: DatosPdfOda }) {
             </View>
           </View>
         </View>
-
-        {d.comprobante === 'rxh' && (
-          <Text style={s.nota}>
-            Recibo por Honorarios: el importe no lleva IGV. De corresponder, se
-            aplicará la retención de renta según la normativa vigente.
-          </Text>
-        )}
 
         {d.condicionesPago ? (
           <>
