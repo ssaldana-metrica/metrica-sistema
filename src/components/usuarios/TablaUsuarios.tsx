@@ -2,7 +2,11 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { cambiarActivo, cambiarRol } from '@/actions/usuarios';
+import {
+  cambiarActivo,
+  cambiarRol,
+  cambiarPuedeReactivar,
+} from '@/actions/usuarios';
 import { ROLES, type Rol } from '@/lib/roles';
 import { useToast } from '@/components/ui/Toast';
 
@@ -12,6 +16,7 @@ export type UsuarioFila = {
   correo: string;
   rol: Rol;
   activo: boolean;
+  puedeReactivar: boolean;
 };
 
 const ETIQUETA_ROL: Record<Rol, string> = {
@@ -62,16 +67,33 @@ export function TablaUsuarios({
     });
   }
 
+  function alternarReactivar(u: UsuarioFila) {
+    const nuevo = !u.puedeReactivar;
+    setOcupado(u.id);
+    startTransition(async () => {
+      const r = await cambiarPuedeReactivar(u.id, nuevo);
+      setOcupado(null);
+      if ('error' in r) toast({ tipo: 'error', texto: r.error });
+      else {
+        toast({
+          texto: `${u.nombre} ${nuevo ? 'ahora puede' : 'ya no puede'} reactivar anulaciones.`,
+        });
+        router.refresh();
+      }
+    });
+  }
+
   return (
     <div className="overflow-hidden rounded-xl border border-linea bg-white shadow-tarjeta">
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[640px] border-collapse">
+        <table className="w-full min-w-[760px] border-collapse">
           <thead>
             <tr className="bg-superficie text-left text-[11px] uppercase tracking-wide text-tinta-tenue">
               <th className="px-5 py-3 font-semibold">Nombre</th>
               <th className="px-5 py-3 font-semibold">Correo</th>
               <th className="px-5 py-3 font-semibold">Rol</th>
               <th className="px-5 py-3 font-semibold">Estado</th>
+              <th className="px-5 py-3 font-semibold">Reactivar anulaciones</th>
               <th className="px-5 py-3 font-semibold" />
             </tr>
           </thead>
@@ -122,6 +144,25 @@ export function TablaUsuarios({
                       <span className="h-1.5 w-1.5 rounded-full bg-current" />
                       {u.activo ? 'Activo' : 'De baja'}
                     </span>
+                  </td>
+                  <td className="px-5 py-3">
+                    {u.rol === 'gerencia' ? (
+                      <span className="text-[12px] text-tinta-tenue">
+                        Sí (gerencia)
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => alternarReactivar(u)}
+                        disabled={fila}
+                        className={`rounded-md border px-2.5 py-1 text-[11.5px] font-semibold transition disabled:opacity-50 ${
+                          u.puedeReactivar
+                            ? 'border-verde/40 text-verde hover:bg-verde-fondo'
+                            : 'border-linea text-tinta-tenue hover:bg-superficie'
+                        }`}
+                      >
+                        {u.puedeReactivar ? 'Sí, puede ✓' : 'No'}
+                      </button>
+                    )}
                   </td>
                   <td className="px-5 py-3 text-right">
                     {!soyYo && (

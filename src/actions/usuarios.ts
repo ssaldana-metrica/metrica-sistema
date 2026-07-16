@@ -55,3 +55,24 @@ export async function cambiarActivo(
   revalidatePath('/usuarios');
   return { ok: true };
 }
+
+// Activa o quita el permiso de reactivar procesos anulados. Solo gerencia.
+export async function cambiarPuedeReactivar(
+  usuarioId: string,
+  puede: boolean,
+): Promise<Resultado> {
+  const sesion = await obtenerSesion();
+  if (!sesion) return { error: 'Sesión expirada. Vuelve a entrar.' };
+  if (sesion.usuario.rol !== 'gerencia')
+    return { error: 'Solo gerencia puede cambiar este permiso.' };
+
+  const supabase = await crearClienteServidor();
+  const { error } = await supabase
+    .from('usuarios')
+    .update({ puede_reactivar: puede })
+    .eq('id', usuarioId);
+  if (error) return { error: 'No se pudo actualizar el permiso.' };
+
+  revalidatePath('/usuarios');
+  return { ok: true };
+}

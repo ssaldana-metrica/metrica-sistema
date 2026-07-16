@@ -12,7 +12,7 @@ export default async function PaginaUsuarios() {
   const supabase = await crearClienteServidor();
   const { data } = await supabase
     .from('usuarios')
-    .select('id, nombre, correo, rol, activo')
+    .select('id, nombre, correo, rol, activo, puede_reactivar')
     .order('activo', { ascending: false })
     .order('nombre');
 
@@ -22,6 +22,7 @@ export default async function PaginaUsuarios() {
     correo: u.correo as string,
     rol: u.rol as Rol,
     activo: u.activo as boolean,
+    puedeReactivar: Boolean(u.puede_reactivar),
   }));
 
   const activos = usuarios.filter((u) => u.activo).length;

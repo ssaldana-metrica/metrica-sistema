@@ -11,6 +11,7 @@ export type Usuario = {
   correo: string;
   rol: Rol;
   activo: boolean;
+  puedeReactivar: boolean;
 };
 
 // Devuelve el usuario logueado y su registro en la tabla `usuarios`,
@@ -29,14 +30,24 @@ export const obtenerSesion = cache(async (): Promise<{
 
   // El RLS solo deja leer la fila propia si el usuario existe y está activo:
   // un usuario dado de baja recibe null aquí aunque tenga sesión de Google.
-  const { data: usuario } = await supabase
+  const { data: fila } = await supabase
     .from('usuarios')
-    .select('id, nombre, correo, rol, activo')
+    .select('id, nombre, correo, rol, activo, puede_reactivar')
     .eq('correo', correo)
     .eq('activo', true)
     .maybeSingle();
 
-  return usuario ? { usuario } : null;
+  if (!fila) return null;
+  return {
+    usuario: {
+      id: fila.id as string,
+      nombre: fila.nombre as string,
+      correo: fila.correo as string,
+      rol: fila.rol as Rol,
+      activo: fila.activo as boolean,
+      puedeReactivar: Boolean(fila.puede_reactivar),
+    },
+  };
 });
 
 // Para páginas restringidas por rol: devuelve la sesión o redirige.
