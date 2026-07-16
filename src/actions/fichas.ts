@@ -225,11 +225,13 @@ export async function marcarListaEjecutivo(
       error: `Antes de marcar lista, completa: ${faltan.join(', ')}.`,
     };
 
-  // Cuenta y CCI son obligatorios en cada proveedor válido; el CCI debe tener
-  // exactamente 20 dígitos.
+  // Descripción, cuenta y CCI son obligatorios en cada proveedor válido; el
+  // CCI debe tener exactamente 20 dígitos.
   for (const p of provValidos) {
     const quien =
       p.agencia.trim() || p.influencerProveedor.trim() || 'un proveedor';
+    if (!p.descripcion.trim())
+      return { error: `Falta la descripción de ${quien}.` };
     if (!p.cuenta.trim())
       return { error: `Falta el número de cuenta de ${quien}.` };
     const cci = soloDigitos(p.cci);

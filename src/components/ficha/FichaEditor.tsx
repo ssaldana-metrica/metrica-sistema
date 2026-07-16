@@ -198,8 +198,8 @@ export function FichaEditor(props: FichaEditorProps) {
 
   function marcarLista() {
     setError(null);
-    // Aviso inmediato: cuenta y CCI obligatorios y CCI de 20 dígitos en cada
-    // proveedor con nombre y monto. (El servidor lo revalida igual.)
+    // Aviso inmediato: descripción, cuenta y CCI obligatorios (CCI de 20
+    // dígitos) en cada proveedor con nombre y monto. (El servidor lo revalida.)
     const provValidos = provs.filter(
       (p) =>
         (p.agencia.trim() || p.influencerProveedor.trim()) &&
@@ -207,6 +207,10 @@ export function FichaEditor(props: FichaEditorProps) {
     );
     for (const p of provValidos) {
       const quien = p.agencia.trim() || p.influencerProveedor.trim();
+      if (!p.descripcion.trim()) {
+        setError(`Falta la descripción de ${quien}.`);
+        return;
+      }
       if (!p.cuenta.trim()) {
         setError(`Falta el número de cuenta de ${quien}.`);
         return;
@@ -542,7 +546,7 @@ export function FichaEditor(props: FichaEditorProps) {
                   <option value="USD">Dólares (USD)</option>
                 </select>
               </Campo>
-              <Campo label="Facturación">
+              <Campo label="Facturación (opcional)">
                 <label className="mt-1.5 flex items-center gap-2 text-[13px]">
                   <input
                     type="checkbox"
@@ -557,7 +561,7 @@ export function FichaEditor(props: FichaEditorProps) {
                 </label>
               </Campo>
             </div>
-            <Campo label="Observaciones">
+            <Campo label="Observaciones (opcional)">
               <textarea
                 value={datos.observacionesEjecutivo}
                 disabled={!editable}
