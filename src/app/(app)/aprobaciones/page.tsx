@@ -16,7 +16,7 @@ export default async function PaginaAprobaciones() {
   const { data } = await supabase
     .from('cotizaciones')
     .select(
-      `id, codigo, proyecto, moneda, fee_porcentaje, fecha_envio_cliente, ejecutivo_id,
+      `id, codigo, proyecto, moneda, fee_porcentaje, fecha_envio_cliente, nota, ejecutivo_id,
        cliente:clientes(nombre_comercial, razon_social),
        ejecutivo:usuarios!cotizaciones_ejecutivo_id_fkey(nombre),
        items:cotizacion_items(orden, proveedor_nombre, descripcion, cantidad, precio_unitario, subtotal)`,
@@ -38,6 +38,7 @@ export default async function PaginaAprobaciones() {
       fechaEnvioCliente: c.fecha_envio_cliente as string | null,
       cliente: cliente?.nombre_comercial ?? '—',
       clienteRazon: cliente?.razon_social ?? '—',
+      nota: (c.nota as string) ?? '',
       ejecutivo: uno(c.ejecutivo as { nombre: string }[] | null)?.nombre ?? '—',
       lineas: ((c.items as unknown[]) ?? [])
         .map((i) => i as Record<string, unknown>)

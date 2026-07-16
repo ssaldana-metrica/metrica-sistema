@@ -21,6 +21,7 @@ export type PendienteAprobacion = {
   cliente: string;
   clienteRazon: string;
   ejecutivo: string;
+  nota: string;
   lineas: {
     orden: number;
     proveedor: string;
@@ -280,6 +281,17 @@ export function ColaAprobacion({
                 </div>
               </div>
             </div>
+
+            {actual.nota.trim() && (
+              <div className="mt-4 rounded-md bg-superficie px-4 py-3">
+                <div className="text-[10px] font-semibold uppercase tracking-wide text-tinta-tenue">
+                  Nota
+                </div>
+                <div className="mt-1 whitespace-pre-wrap text-[12px] text-tinta-suave">
+                  {actual.nota.trim()}
+                </div>
+              </div>
+            )}
 
             <div className="mt-5 border-t border-linea pt-3 text-[10.5px] leading-relaxed text-tinta-tenue">
               • {EMPRESA.notaCotizacion}
