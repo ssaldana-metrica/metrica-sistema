@@ -32,7 +32,7 @@ export default async function DetalleCotizacion({
   const { data: cot } = await supabase
     .from('cotizaciones')
     .select(
-      `id, codigo, estado, proyecto, moneda, fee_porcentaje, fecha_envio_cliente,
+      `id, codigo, estado, proyecto, moneda, fee_porcentaje, fecha_envio_cliente, nota,
        cliente_id, ejecutivo_id, observacion_admin, fecha_aprobacion, motivo_anulacion, pdf_url,
        cliente:clientes(nombre_comercial),
        ejecutivo:usuarios!cotizaciones_ejecutivo_id_fkey(nombre),
@@ -79,6 +79,7 @@ export default async function DetalleCotizacion({
       fechaEnvioCliente: cot.fecha_envio_cliente as string | null,
       estado: cot.estado as string,
       observacionAdmin: cot.observacion_admin as string | null,
+      nota: (cot.nota as string) ?? '',
       lineas: lineas.map((l) => ({
         proveedor: l.proveedor_nombre as string,
         descripcion: l.descripcion as string,

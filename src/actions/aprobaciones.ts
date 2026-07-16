@@ -28,7 +28,7 @@ async function cargarPendiente(id: string) {
   const { data: cot } = await supabase
     .from('cotizaciones')
     .select(
-      `id, codigo, estado, proyecto, moneda, fee_porcentaje, fecha_envio_cliente, ejecutivo_id,
+      `id, codigo, estado, proyecto, moneda, fee_porcentaje, fecha_envio_cliente, nota, ejecutivo_id,
        cliente:clientes(nombre_comercial, razon_social, ruc),
        ejecutivo:usuarios!cotizaciones_ejecutivo_id_fkey(nombre, correo),
        items:cotizacion_items(orden, proveedor_nombre, descripcion, cantidad, precio_unitario, subtotal)`,
@@ -97,6 +97,7 @@ export async function aprobarCotizacion(id: string): Promise<ResultadoAprobar> {
       ruc: cliente.ruc,
     },
     ejecutivo: ejecutivo.nombre,
+    nota: (cot.nota as string) ?? '',
     lineas,
   };
   let pdf: Buffer;

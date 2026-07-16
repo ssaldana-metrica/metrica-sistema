@@ -36,6 +36,8 @@ export type DatosPdf = {
     precio: number;
     subtotal: number;
   }[];
+  // Comentario especial del cliente. Si está vacío, no se pinta en el PDF.
+  nota?: string;
   // true = vista para revisión de administración (aún sin aprobar).
   preliminar?: boolean;
   // true = pinta el sello "ANULADO".
@@ -110,6 +112,25 @@ const s = StyleSheet.create({
     fontSize: 8,
     color: C.gris,
     lineHeight: 1.5,
+  },
+  // Nota del cliente (solo si viene con texto)
+  notaCliente: {
+    marginTop: 16,
+    backgroundColor: C.fondoTotal,
+    borderRadius: 5,
+    padding: 11,
+  },
+  notaClienteK: {
+    fontSize: 7.5,
+    color: C.gris,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    marginBottom: 3,
+  },
+  notaClienteV: {
+    fontSize: 9.5,
+    color: C.tinta,
+    lineHeight: 1.45,
   },
 });
 
@@ -204,6 +225,13 @@ function Documento({ d }: { d: DatosPdf }) {
             </View>
           </View>
         </View>
+
+        {d.nota?.trim() ? (
+          <View style={s.notaCliente} wrap={false}>
+            <Text style={s.notaClienteK}>Nota</Text>
+            <Text style={s.notaClienteV}>{d.nota.trim()}</Text>
+          </View>
+        ) : null}
 
         <Text style={s.nota}>{EMPRESA.notaCotizacion}</Text>
 

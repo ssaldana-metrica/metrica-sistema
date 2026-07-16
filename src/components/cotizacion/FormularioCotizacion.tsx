@@ -29,6 +29,7 @@ export type CotizacionInicial = {
   fechaEnvioCliente: string | null;
   estado: string;
   observacionAdmin: string | null;
+  nota: string;
   lineas: {
     proveedor: string;
     descripcion: string;
@@ -63,6 +64,7 @@ export function FormularioCotizacion({
     inicial ? String(inicial.feePorcentaje) : '12',
   );
   const [fecha, setFecha] = useState(inicial?.fechaEnvioCliente ?? '');
+  const [nota, setNota] = useState(inicial?.nota ?? '');
   const [lineas, setLineas] = useState<LineaUI[]>(
     inicial && inicial.lineas.length > 0
       ? inicial.lineas.map((l) => ({
@@ -114,6 +116,7 @@ export function FormularioCotizacion({
       moneda,
       feePorcentaje: parseFloat(fee) || 0,
       fechaEnvioCliente: fecha || null,
+      nota,
       lineas: lineas.map((l) => ({
         proveedorNombre: l.proveedor,
         descripcion: l.descripcion,
@@ -324,6 +327,18 @@ export function FormularioCotizacion({
             </div>
           </div>
         )}
+
+        {/* Nota opcional (comentario especial del cliente) */}
+        <div className="mb-6">
+          <label className={labelClase}>Nota (opcional)</label>
+          <textarea
+            value={nota}
+            onChange={(e) => setNota(e.target.value)}
+            rows={2}
+            placeholder="Comentario especial solicitado por el cliente. Si lo dejas vacío, no aparece en el PDF."
+            className={`${inputClase} resize-y`}
+          />
+        </div>
 
         {/* Líneas de proveedor */}
         <div className="mb-2 flex items-end justify-between">

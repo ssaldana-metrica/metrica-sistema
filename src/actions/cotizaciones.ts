@@ -35,6 +35,7 @@ export type EntradaCotizacion = {
   moneda: Moneda;
   feePorcentaje: number;
   fechaEnvioCliente: string | null;
+  nota: string;
   lineas: LineaEntrada[];
 };
 
@@ -139,6 +140,7 @@ export async function guardarCotizacion(
     moneda: entrada.moneda,
     fee_porcentaje: entrada.feePorcentaje,
     fecha_envio_cliente: entrada.fechaEnvioCliente || null,
+    nota: entrada.nota.trim(),
   };
 
   let id: string;
@@ -187,6 +189,13 @@ export async function guardarCotizacion(
       return { error: 'No se pudo crear la cotización. Intenta de nuevo.' };
     id = fila.cot_id;
     codigoAsignado = fila.cot_codigo;
+    // crear_cotizacion no recibe la nota; se guarda aquí si viene con texto.
+    if (entrada.nota.trim()) {
+      await supabase
+        .from('cotizaciones')
+        .update({ nota: entrada.nota.trim() })
+        .eq('id', id);
+    }
   }
 
   const filas = entrada.lineas.map((l, i) => ({
@@ -232,6 +241,7 @@ export async function guardarCotizacion(
     const proyecto = entrada.proyecto.trim();
     const fechaEnvioCliente = entrada.fechaEnvioCliente;
     const feePorcentaje = entrada.feePorcentaje;
+    const nota = entrada.nota.trim();
     const lineasPdf = entrada.lineas.map((l, i) => ({
       orden: i + 1,
       proveedor: l.proveedorNombre.trim(),
@@ -279,6 +289,7 @@ export async function guardarCotizacion(
             },
             ejecutivo,
             lineas: lineasPdf,
+            nota,
             preliminar: true,
           });
           adjuntos = [{ nombre: `${codigo}-preliminar.pdf`, contenido: pdf }];
