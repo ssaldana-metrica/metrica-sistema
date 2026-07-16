@@ -574,20 +574,26 @@ export function FichaEditor(props: FichaEditorProps) {
               realmente van a cobrar. Montos en {monedaTexto(datos.moneda)}.
             </p>
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[960px] border-collapse">
+              <table className="w-full min-w-[1560px] table-fixed border-collapse">
                 <thead>
                   <tr className="text-left text-[10.5px] uppercase tracking-wide text-tinta-tenue">
-                    <th className="px-2 py-2 font-semibold">Agencia</th>
-                    <th className="px-2 py-2 font-semibold">
+                    <th className="w-[150px] px-2 py-2 font-semibold">Agencia</th>
+                    <th className="w-[170px] px-2 py-2 font-semibold">
                       Influencer / proveedor
                     </th>
-                    <th className="px-2 py-2 font-semibold">RUC</th>
-                    <th className="px-2 py-2 font-semibold">Descripción</th>
-                    <th className="px-2 py-2 text-right font-semibold">Monto</th>
-                    <th className="px-2 py-2 font-semibold">Banco</th>
-                    <th className="px-2 py-2 font-semibold">Cuenta</th>
-                    <th className="px-2 py-2 font-semibold">CCI (20 díg.)</th>
-                    <th className="px-2 py-2 font-semibold">Email</th>
+                    <th className="w-[120px] px-2 py-2 font-semibold">RUC</th>
+                    <th className="w-[250px] px-2 py-2 font-semibold">
+                      Descripción
+                    </th>
+                    <th className="w-[110px] px-2 py-2 text-right font-semibold">
+                      Monto
+                    </th>
+                    <th className="w-[130px] px-2 py-2 font-semibold">Banco</th>
+                    <th className="w-[170px] px-2 py-2 font-semibold">Cuenta</th>
+                    <th className="w-[200px] px-2 py-2 font-semibold">
+                      CCI (20 díg.)
+                    </th>
+                    <th className="w-[210px] px-2 py-2 font-semibold">Email</th>
                     <th className="w-8" />
                   </tr>
                 </thead>
