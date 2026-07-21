@@ -5,8 +5,9 @@ import { crearClienteAdmin } from '@/lib/supabase/admin';
 import { dominioPermitido } from '@/config/dominios';
 import { SelectorRol } from './selector-rol';
 
-// Primer ingreso de un usuario Métrica que aún no tiene rol: elige entre
-// Administración y Ejecutivo. Si ya tiene cuenta, no pasa por aquí.
+// Primer ingreso de un usuario Métrica que aún no tiene cuenta: ingresa como
+// Ejecutivo (Administración/Gerencia las asigna Gerencia). Si ya tiene cuenta,
+// no pasa por aquí.
 export default async function PaginaElegirRol() {
   const supabase = await crearClienteServidor();
   const {
@@ -47,9 +48,9 @@ export default async function PaginaElegirRol() {
             </div>
           </div>
 
-          <h1 className="text-lg font-bold tracking-tight">¿Cuál es tu rol?</h1>
+          <h1 className="text-lg font-bold tracking-tight">Bienvenido a Métrica</h1>
           <p className="mb-6 mt-1 text-[13px] text-tinta-suave">
-            Bienvenido a Métrica. Elige cómo usarás el sistema para continuar.
+            Ingresa al sistema para empezar. Tu cuenta se crea como Ejecutivo.
           </p>
 
           <SelectorRol />

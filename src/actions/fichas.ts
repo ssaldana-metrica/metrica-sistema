@@ -140,31 +140,65 @@ async function persistir(
     .eq('estado', 'en_proceso'); // candado: solo editable en proceso
   if (errFicha) return 'No se pudieron guardar los datos. Intenta de nuevo.';
 
-  // Reemplazo de la tabla de proveedores (papel de trabajo del ejecutivo).
-  const { error: errBorrar } = await supabase
-    .from('ficha_proveedores')
-    .delete()
-    .eq('ficha_id', fichaId);
-  if (errBorrar) return 'No se pudo actualizar la tabla de proveedores.';
+  // Reconciliación de la tabla de proveedores por 'orden' (posición estable),
+  // NO borrado en bloque. Antes se borraba todo y se reinsertaba, pero si un
+  // proveedor ya tenía una ODA (o una fila de control) apuntándolo, el DELETE
+  // violaba la llave foránea y el guardado fallaba PARA SIEMPRE, dejando la
+  // ficha atascada. Actualizando en su sitio (mismo id) preservamos esas
+  // referencias; la ODA guarda su propia copia de los datos, así no se corrompe.
+  const datosFila = (p: FichaProveedorEntrada) => ({
+    agencia: p.agencia.trim(),
+    influencer_proveedor: p.influencerProveedor.trim(),
+    ruc: p.ruc.trim(),
+    descripcion: p.descripcion.trim(),
+    monto: p.monto || 0,
+    banco: p.banco.trim(),
+    cuenta: p.cuenta.trim(),
+    cci: soloDigitos(p.cci),
+    email_proveedor: p.emailProveedor.trim(),
+  });
 
-  if (proveedores.length > 0) {
-    const filas = proveedores.map((p, i) => ({
-      ficha_id: fichaId,
-      orden: i + 1,
-      agencia: p.agencia.trim(),
-      influencer_proveedor: p.influencerProveedor.trim(),
-      ruc: p.ruc.trim(),
-      descripcion: p.descripcion.trim(),
-      monto: p.monto || 0,
-      banco: p.banco.trim(),
-      cuenta: p.cuenta.trim(),
-      cci: soloDigitos(p.cci),
-      email_proveedor: p.emailProveedor.trim(),
-    }));
-    const { error: errIns } = await supabase
+  const { data: existentes } = await supabase
+    .from('ficha_proveedores')
+    .select('id, orden')
+    .eq('ficha_id', fichaId);
+  const idPorOrden = new Map<number, string>();
+  (existentes ?? []).forEach((r) =>
+    idPorOrden.set(r.orden as number, r.id as string),
+  );
+
+  // Upsert fila por fila: si ya existe una en esa posición se actualiza; si no,
+  // se inserta. Los 'orden' consumidos se van quitando del mapa.
+  for (let i = 0; i < proveedores.length; i++) {
+    const orden = i + 1;
+    const fila = datosFila(proveedores[i]);
+    const idExistente = idPorOrden.get(orden);
+    if (idExistente) {
+      const { error } = await supabase
+        .from('ficha_proveedores')
+        .update(fila)
+        .eq('id', idExistente);
+      if (error) return 'No se pudo actualizar la tabla de proveedores.';
+      idPorOrden.delete(orden);
+    } else {
+      const { error } = await supabase
+        .from('ficha_proveedores')
+        .insert({ ficha_id: fichaId, orden, ...fila });
+      if (error) return 'No se pudieron guardar los proveedores.';
+    }
+  }
+
+  // Filas sobrantes (el ejecutivo redujo la lista): se quitan. Si una está
+  // referenciada por una ODA ya generada, la BD impide el borrado y avisamos
+  // con claridad en vez de fallar en silencio.
+  const sobrantes = [...idPorOrden.entries()].sort((a, b) => a[0] - b[0]);
+  for (const [orden, id] of sobrantes) {
+    const { error } = await supabase
       .from('ficha_proveedores')
-      .insert(filas);
-    if (errIns) return 'No se pudieron guardar los proveedores.';
+      .delete()
+      .eq('id', id);
+    if (error)
+      return `No puedes quitar el proveedor #${orden}: ya tiene una orden (ODA) generada. Anula o reabre esa orden antes de quitarlo.`;
   }
   return null;
 }
