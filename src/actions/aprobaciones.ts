@@ -117,7 +117,7 @@ export async function aprobarCotizacion(id: string): Promise<ResultadoAprobar> {
     return { error: 'No se pudo guardar el PDF en el almacén. Intenta de nuevo.' };
 
   // 3. Marcar aprobada (el RLS exige rol admin/gerencia)
-  const { error: errorEstado } = await supabase
+  const { data: aprobada, error: errorEstado } = await supabase
     .from('cotizaciones')
     .update({
       estado: 'aprobada',
@@ -127,8 +127,16 @@ export async function aprobarCotizacion(id: string): Promise<ResultadoAprobar> {
       pdf_url: ruta,
     })
     .eq('id', id)
-    .eq('estado', 'pendiente'); // candado: solo si sigue pendiente
+    .eq('estado', 'pendiente') // candado: solo si sigue pendiente
+    .select('id');
   if (errorEstado) return { error: 'No se pudo actualizar el estado.' };
+  // 0 filas = alguien más la resolvió entre la lectura y esta escritura. No
+  // seguimos (evita crear la ficha y mandar un segundo correo de aprobación).
+  if (!aprobada || aprobada.length === 0)
+    return {
+      error:
+        'Esta cotización ya fue resuelta por otra persona. Recarga la página.',
+    };
 
   // 4. Crear automáticamente la ficha de apertura (1 a 1). Si fallara, NO
   // tumba la aprobación (que ya quedó hecha): se sigue sin enlace en el correo.
@@ -213,7 +221,7 @@ export async function reabrirCotizacion(
   if (cot.estado !== 'aprobada')
     return { error: 'Solo se puede reabrir una cotización aprobada.' };
 
-  const { error } = await supabase
+  const { data: reabierta, error } = await supabase
     .from('cotizaciones')
     .update({
       estado: 'observada',
@@ -223,8 +231,11 @@ export async function reabrirCotizacion(
       pdf_url: null,
     })
     .eq('id', id)
-    .eq('estado', 'aprobada');
+    .eq('estado', 'aprobada')
+    .select('id');
   if (error) return { error: 'No se pudo reabrir la cotización.' };
+  if (!reabierta || reabierta.length === 0)
+    return { error: 'El estado de la cotización cambió. Recarga la página.' };
 
   const eje = uno(cot.ejecutivo as { nombre: string; correo: string }[] | null);
   const cliente = uno(cot.cliente as { nombre_comercial: string }[] | null);
@@ -265,12 +276,18 @@ export async function observarCotizacion(
     cot.ejecutivo as { nombre: string; correo: string }[] | null,
   );
 
-  const { error } = await supabase
+  const { data: observada, error } = await supabase
     .from('cotizaciones')
     .update({ estado: 'observada', observacion_admin: observacion.trim() })
     .eq('id', id)
-    .eq('estado', 'pendiente');
+    .eq('estado', 'pendiente')
+    .select('id');
   if (error) return { error: 'No se pudo registrar la observación.' };
+  if (!observada || observada.length === 0)
+    return {
+      error:
+        'Esta cotización ya fue resuelta por otra persona. Recarga la página.',
+    };
 
   const correo = await enviarCorreoInterno({
     para: ejecutivo?.correo ?? '',

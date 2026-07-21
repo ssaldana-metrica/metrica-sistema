@@ -276,7 +276,7 @@ export async function marcarListaEjecutivo(
       };
   }
 
-  const { error: errEstado } = await ctx.supabase
+  const { data: marcada, error: errEstado } = await ctx.supabase
     .from('fichas_apertura')
     .update({
       estado: 'lista_ejecutivo',
@@ -284,8 +284,13 @@ export async function marcarListaEjecutivo(
       lista_ejecutivo_por: ctx.usuarioId,
     })
     .eq('id', fichaId)
-    .eq('estado', 'en_proceso');
+    .eq('estado', 'en_proceso')
+    .select('id');
   if (errEstado) return { error: 'No se pudo marcar como lista.' };
+  // 0 filas = el estado ya cambió (p. ej. administración la reabrió o la tomó).
+  // No seguimos para no avisar por correo algo que no ocurrió.
+  if (!marcada || marcada.length === 0)
+    return { error: 'El estado de la ficha cambió. Recarga la página.' };
 
   // Aviso a administración de que la ficha ya está lista para seguimiento.
   const ejecutivo = ctx.usuarioNombre;
@@ -316,7 +321,7 @@ export async function marcarListaEjecutivo(
            <p style="margin:14px 0 0;"><a href="${urlSistema()}/fichas/${fichaId}" style="display:inline-block;background:#0E7C66;color:#fff;text-decoration:none;font-size:13px;font-weight:bold;padding:9px 16px;border-radius:8px;">Abrir la ficha →</a></p>`,
         ),
       });
-      console.log(`[correo] ficha lista ${f?.codigo} a admin → ${r.detalle}`);
+      console.log(`[correo] ficha lista ${f?.codigo} a admin · enviado=${r.enviado}`);
     } catch (e) {
       console.error('[correo] aviso de ficha lista falló:', e);
     }
@@ -376,6 +381,16 @@ async function persistirSeguimiento(
   facturasCliente: FacturaClienteEntrada[],
   proveedores: SeguimientoProveedorEntrada[],
 ): Promise<string | null> {
+  // Los montos jamás son negativos (ni el total ni el fee de una factura).
+  const negativoCliente = facturasCliente.some(
+    (f) => (f.total ?? 0) < 0 || (f.fee ?? 0) < 0,
+  );
+  const negativoProveedor = proveedores.some((p) =>
+    p.facturas.some((f) => (f.total ?? 0) < 0),
+  );
+  if (negativoCliente || negativoProveedor)
+    return 'Hay una factura con monto negativo.';
+
   // Facturas del cliente (reemplazo completo).
   const { error: errDelC } = await supabase
     .from('ficha_facturas_cliente')
@@ -609,7 +624,7 @@ export async function cerrarFicha(
   const pdf = await generarYGuardarPdf(admin, fichaId);
   if ('error' in pdf) return { error: pdf.error };
 
-  const { error: errEstado } = await supabase
+  const { data: cerrada, error: errEstado } = await supabase
     .from('fichas_apertura')
     .update({
       estado: 'completa',
@@ -618,8 +633,11 @@ export async function cerrarFicha(
       pdf_url: pdf.ruta,
     })
     .eq('id', fichaId)
-    .eq('estado', 'lista_ejecutivo'); // candado
+    .eq('estado', 'lista_ejecutivo') // candado
+    .select('id');
   if (errEstado) return { error: 'No se pudo cerrar la ficha.' };
+  if (!cerrada || cerrada.length === 0)
+    return { error: 'El estado de la ficha cambió. Recarga la página.' };
 
   const { data: firmado } = await admin.storage
     .from('fichas')
@@ -703,7 +721,7 @@ export async function reabrirFicha(
                <p style="margin:14px 0 0;"><a href="${urlSistema()}/fichas/${fichaId}" style="display:inline-block;background:#0E7C66;color:#fff;text-decoration:none;font-size:13px;font-weight:bold;padding:9px 16px;border-radius:8px;">Abrir la ficha →</a></p>`,
             ),
           });
-          console.log(`[correo] ficha reabierta ${ficha.codigo} a ejecutivo → ${r.detalle}`);
+          console.log(`[correo] ficha reabierta ${ficha.codigo} a ejecutivo · enviado=${r.enviado}`);
         } catch (e) {
           console.error('[correo] aviso de reapertura falló:', e);
         }

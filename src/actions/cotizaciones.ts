@@ -315,7 +315,7 @@ export async function guardarCotizacion(
           adjuntos,
         });
         // Visible en la terminal del servidor: éxito o causa exacta del fallo
-        console.log(`[correo] aviso de ${codigo} a admin → ${resultado.detalle}`);
+        console.log(`[correo] aviso de ${codigo} a admin · enviado=${resultado.enviado}`);
       } catch (e) {
         console.error(`[correo] aviso de ${codigo} falló:`, e);
       }

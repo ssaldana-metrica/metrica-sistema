@@ -243,7 +243,7 @@ export async function emitirOrden(id: string): Promise<ResultadoEmitir> {
     .upload(ruta, pdf, { contentType: 'application/pdf', upsert: true });
   if (errSubida) return { error: 'No se pudo guardar el PDF en el almacén.' };
 
-  const { error: errEstado } = await ctx.supabase
+  const { data: emitida, error: errEstado } = await ctx.supabase
     .from('ordenes_adquisicion')
     .update({
       estado: 'emitida',
@@ -252,8 +252,11 @@ export async function emitirOrden(id: string): Promise<ResultadoEmitir> {
       pdf_url: ruta,
     })
     .eq('id', id)
-    .eq('estado', 'borrador'); // candado
+    .eq('estado', 'borrador') // candado
+    .select('id');
   if (errEstado) return { error: 'No se pudo emitir la orden.' };
+  if (!emitida || emitida.length === 0)
+    return { error: 'El estado de la orden cambió. Recarga la página.' };
 
   const { data: firmado } = await admin.storage
     .from('ordenes')

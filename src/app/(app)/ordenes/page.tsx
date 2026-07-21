@@ -145,7 +145,7 @@ export default async function PaginaOrdenes({
               <th className="px-5 py-3 font-semibold">Código ODA</th>
               <th className="px-5 py-3 font-semibold">Proveedor</th>
               <th className="px-5 py-3 font-semibold">COT</th>
-              <th className="px-5 py-3 text-right font-semibold">Monto</th>
+              <th className="px-5 py-3 text-right font-semibold">Monto (sin IGV)</th>
               <th className="px-5 py-3 font-semibold">Estado</th>
               <th className="px-5 py-3 font-semibold">PDF</th>
               <th className="px-5 py-3 font-semibold">Actualizada</th>
