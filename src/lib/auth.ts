@@ -22,7 +22,15 @@ export const obtenerSesion = cache(async (): Promise<{
   usuario: Usuario;
 } | null> => {
   const supabase = await crearClienteServidor();
-  const { data: { user } } = await supabase.auth.getUser();
+  // getSession() lee la sesión de la cookie SIN viaje de red. Es seguro aquí
+  // porque el middleware (proxy.ts) ya revalidó el token con getUser() en ESTA
+  // misma petición (y redirige a /login si no es válido); repetir esa
+  // validación por red en cada render/acción era un ida y vuelta de más a
+  // Supabase por cada clic. La barrera real de datos sigue siendo el RLS: la
+  // consulta a `usuarios` de abajo solo devuelve la fila si el JWT valida y el
+  // usuario está activo, así que un usuario dado de baja igual recibe null.
+  const { data: { session } } = await supabase.auth.getSession();
+  const user = session?.user;
   if (!user?.email) return null;
 
   const correo = user.email.toLowerCase();
