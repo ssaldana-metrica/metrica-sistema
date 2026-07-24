@@ -41,5 +41,6 @@ export async function GET(request: Request) {
     return NextResponse.redirect(`${origin}/acceso-denegado?motivo=inactivo`);
   }
 
-  return NextResponse.redirect(`${origin}/panel`);
+  // Al selector de sistemas: desde ahí elige a cuál entrar.
+  return NextResponse.redirect(`${origin}/`);
 }

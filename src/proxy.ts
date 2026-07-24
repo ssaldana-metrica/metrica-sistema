@@ -42,9 +42,11 @@ export default async function proxy(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (user && (ruta === '/login' || ruta === '/')) {
+  // Con sesión, /login no tiene sentido: al selector de sistemas. La raíz "/"
+  // SÍ se renderiza (es el selector), no se redirige.
+  if (user && ruta === '/login') {
     const url = request.nextUrl.clone();
-    url.pathname = '/panel';
+    url.pathname = '/';
     return NextResponse.redirect(url);
   }
 

@@ -80,17 +80,25 @@ export function Sidebar({
   return (
     <aside className="flex h-full w-[248px] shrink-0 flex-col overflow-y-auto bg-lateral py-6">
       <div className="mx-6 mb-5 border-b border-white/10 pb-6">
-        <Image
-          src="/marca/logo-metrica-blanco.png"
-          alt="Métrica"
-          width={734}
-          height={372}
-          priority
-          className="h-7 w-auto"
-        />
-        <div className="mt-2 text-[10.5px] tracking-wide text-lateral-texto">
-          Sistema Operativo
-        </div>
+        <Link
+          href="/"
+          onClick={onNavegar}
+          title="Volver al selector de sistemas"
+          className="block transition hover:opacity-80"
+        >
+          <Image
+            src="/marca/logo-metrica-blanco.png"
+            alt="Métrica"
+            width={734}
+            height={372}
+            priority
+            className="h-7 w-auto"
+          />
+          <div className="mt-2 flex items-center gap-1.5 text-[10.5px] tracking-wide text-lateral-texto">
+            Cotizaciones
+            <span className="text-lateral-texto/50">· cambiar sistema</span>
+          </div>
+        </Link>
       </div>
 
       {grupos.map((grupo) => (
