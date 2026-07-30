@@ -1,29 +1,35 @@
 import { NextResponse } from 'next/server';
 import { obtenerSesion } from '@/lib/auth';
+import { decodificarTurboStream } from '@/lib/turbo-stream';
 
-// ── Sonda de diagnóstico · encontrar el listado de NORMAS LEGALES del día ────
+// ── Sonda de diagnóstico · confirmar el listado de Normas Legales ────────────
 //
 // Lo aprendido:
 //   V1 — Vercel llega a El Peruano sin bloqueo.
 //   V2 — Es una app React Router v7; el HTML no trae marcado útil.
-//   V3 — Se puede pedir por fecha; solo `ci=all` devuelve publicaciones.
-//   V4 — El formato es turbo-stream y ya se leen los nombres de campo:
-//        op, fechaPublicacion, tipoDispositivo, sumilla, rubro,
-//        numeroDispositivo, nombreDispositivo, sector, urlPDF, clasificacion1..3
+//   V3 — Se puede pedir por fecha.
+//   V4 — Formato turbo-stream; se leen los nombres de campo.
+//   V5 — El listado por defecto trae Boletín Oficial, NO normas legales.
 //
-// EL PROBLEMA QUE ABRIÓ LA V4: los 13 resultados que devuelve
-// `_root.data?ci=all&fecha=…` son TODOS rubro "BO" — Boletín Oficial, o sea
-// sucesiones intestadas y avisos notariales. Ninguna norma legal. Por eso
-// /dispositivo/NL/<código>.data dio 404 y el mismo código bajo /BO/ dio 200:
-// el código era de Boletín, no de Normas Legales.
+// LA V5 SE EQUIVOCÓ AL DECLARAR GANADOR. Su criterio era contar la cadena
+// "rubro","NL" en el payload, pero eso aparecía en el ECO DE LOS PARÁMETROS
+// enviados, no en un resultado. La prueba: `rubro=NL` devolvió exactamente los
+// mismos 13 códigos de Boletín que el control, con ocho bytes más — los del
+// parámetro repetido de vuelta. El filtro fue ignorado.
 //
-// Los rubros del sistema son BO, EX, NL y SE. El monitor necesita NL, y hay
-// una ruta específica vista en el manifiesto del navegador:
-// /cuadernillo/NL/AAAAMMDD — el cuadernillo de Normas Legales del día.
+// El que sí funcionó fue `tipoPublicacion=NL`: códigos distintos, terminados en
+// -1 en vez de -8, y coincidentes con los que se ven en pantalla. Su rastro
+// delator fue "RESOLUCIÓN MINISTERIAL" en singular — un valor real de
+// tipoDispositivo. Los plurales ("RESOLUCIONES MINISTERIALES") son etiquetas
+// del menú de filtros y salen en todos los payloads por igual.
 //
-// V5 (esto): probar las formas de pedir NL y quedarse con la que sirva. Se
-// mide en NORMAS, no en bytes: un payload grande lleno de opciones de filtro
-// no vale nada.
+// V6 (esto): se acabaron las heurísticas de texto. Se decodifica el payload de
+// verdad y se devuelven los registros ya armados. Si el formato no es el
+// esperado, revienta con un mensaje claro en vez de inventar un resultado.
+//
+// De la cabecera de la V5 salió además la forma de la respuesta:
+//   totalHits: 573 · start: 0 · paginatedBy: 20 · hits: [20 posiciones]
+// O sea que hay paginación de 20 en 20 y habrá que recorrer páginas.
 //
 // Es temporal: se borra cuando el lector esté escrito.
 
@@ -50,59 +56,74 @@ function fechaLima(): string {
     .replaceAll('-', '');
 }
 
-async function traer(url: string, timeoutMs = 20_000) {
+// El objeto de resultados está anidado bajo la ruta de React Router, cuyo
+// nombre puede cambiar. En vez de asumir el camino, se busca el primer objeto
+// que tenga `hits`: eso sobrevive a que renombren la ruta.
+function buscarResultados(nodo: unknown, profundidad = 0): Record<string, unknown> | null {
+  if (profundidad > 8 || nodo === null || typeof nodo !== 'object') return null;
+  const obj = nodo as Record<string, unknown>;
+  if (Array.isArray(obj.hits)) return obj;
+  for (const hijo of Object.values(obj)) {
+    const hallado = buscarResultados(hijo, profundidad + 1);
+    if (hallado) return hallado;
+  }
+  return null;
+}
+
+async function inspeccionar(nombre: string, url: string) {
   try {
     const r = await fetch(url, {
       headers: NAVEGADOR,
       redirect: 'follow',
       cache: 'no-store',
-      signal: AbortSignal.timeout(timeoutMs),
+      signal: AbortSignal.timeout(20_000),
     });
+    if (!r.ok) return { nombre, url, estado: r.status, error: 'no respondió 200' };
+
+    const crudo = await r.text();
+    const arbol = decodificarTurboStream(crudo);
+    const resultados = buscarResultados(arbol);
+
+    if (!resultados) {
+      return { nombre, url, estado: r.status, error: 'no se encontró ningún bloque con `hits`' };
+    }
+
+    const hits = (resultados.hits ?? []) as Record<string, unknown>[];
+
+    // Qué rubros y tipos trae DE VERDAD, contados sobre los registros ya
+    // decodificados y no sobre el texto crudo.
+    const rubros: Record<string, number> = {};
+    const tipos: Record<string, number> = {};
+    for (const h of hits) {
+      const rubro = String(h.rubro ?? '¿?');
+      const tipo = String(h.tipoDispositivo ?? '¿?');
+      rubros[rubro] = (rubros[rubro] ?? 0) + 1;
+      tipos[tipo] = (tipos[tipo] ?? 0) + 1;
+    }
+
     return {
+      nombre,
+      url,
       estado: r.status,
-      tipo: r.headers.get('content-type'),
-      texto: r.ok ? await r.text() : null,
+      params: resultados.params,
+      totalHits: resultados.totalHits,
+      paginatedBy: resultados.paginatedBy,
+      start: resultados.start,
+      hasNext: resultados.hasNext,
+      enEstaPagina: hits.length,
+      rubros,
+      tipos,
+      // Dos registros completos: con esto se termina de fijar el mapeo a las
+      // columnas de normas_legales_hallazgos.
+      ejemplos: hits.slice(0, 2),
     };
   } catch (e) {
     return {
-      estado: null,
-      tipo: null,
-      texto: null,
-      error: e instanceof Error ? `${e.name}: ${e.message}` : 'error',
+      nombre,
+      url,
+      error: e instanceof Error ? `${e.name}: ${e.message}` : 'error desconocido',
     };
   }
-}
-
-// Qué tan útil es un payload: no su tamaño, sino cuántas normas trae y de qué
-// rubro. La V4 enseñó que 87 KB pueden ser casi todo menú de filtros.
-function medir(texto: string) {
-  const codigos = [...new Set(texto.match(/\b\d{7}-\d\b/g) ?? [])];
-
-  // En turbo-stream el valor va justo después de su clave, así que
-  // "rubro","NL" pegados indican una publicación de Normas Legales.
-  const contar = (rubro: string) =>
-    (texto.match(new RegExp(`"rubro","${rubro}"`, 'g')) ?? []).length;
-
-  // Los tipos que de verdad importan para el monitor.
-  const tipos = [
-    ...new Set(
-      (
-        texto.match(
-          /"(DECRETO SUPREMO|RESOLUCI[ÓO]N MINISTERIAL|RESOLUCIONES MINISTERIALES|DECRETO DE URGENCIA|LEY|RESOLUCI[ÓO]N DIRECTORAL)"/gi,
-        ) ?? []
-      ).map((t) => t.replaceAll('"', '')),
-    ),
-  ];
-
-  return {
-    codigos: codigos.length,
-    primeros: codigos.slice(0, 5),
-    rubroNL: contar('NL'),
-    rubroBO: contar('BO'),
-    rubroEX: contar('EX'),
-    rubroSE: contar('SE'),
-    tiposVistos: tipos,
-  };
 }
 
 export async function GET(request: Request) {
@@ -114,60 +135,22 @@ export async function GET(request: Request) {
   const params = new URL(request.url).searchParams;
   const fecha = params.get('fecha') ?? fechaLima();
 
-  const candidatos = [
-    // La ruta dedicada del cuadernillo de Normas Legales: la más prometedora.
-    { nombre: 'cuadernillo NL', url: `${RAIZ}/cuadernillo/NL/${fecha}.data` },
-    { nombre: 'cuadernillo NL (sin .data)', url: `${RAIZ}/cuadernillo/NL/${fecha}` },
-    // Filtrar el listado general por rubro, con los nombres de parámetro más
-    // plausibles según los campos que ya conocemos.
-    { nombre: 'raíz rubro=NL', url: `${RAIZ}/_root.data?ci=all&fecha=${fecha}&rubro=NL` },
-    { nombre: 'raíz ci=NL', url: `${RAIZ}/_root.data?ci=NL&fecha=${fecha}` },
-    {
-      nombre: 'raíz tipoPublicacion=NL',
-      url: `${RAIZ}/_root.data?ci=all&fecha=${fecha}&tipoPublicacion=NL`,
-    },
-    // Control: el listado tal como lo probó la V4, para comparar.
-    { nombre: 'raíz ci=all (control)', url: `${RAIZ}/_root.data?ci=all&fecha=${fecha}` },
-  ];
-
-  const resultados = await Promise.all(
-    candidatos.map(async (c) => {
-      const r = await traer(c.url);
-      if (!r.texto) {
-        return { ...c, estado: r.estado, tipo: r.tipo, bytes: 0, medicion: null, util: false };
-      }
-      const medicion = medir(r.texto);
-      return {
-        ...c,
-        estado: r.estado,
-        tipo: r.tipo,
-        bytes: r.texto.length,
-        medicion,
-        util: medicion.rubroNL > 0,
-      };
-    }),
-  );
-
-  const ganador = resultados.find((r) => r.util);
-
-  // Del ganador se devuelve el ARRANQUE del payload: la V4 enseñó que ahí
-  // viven la ruta y las claves, que es lo que hace falta para el decodificador.
-  let cabecera: string | null = null;
-  if (ganador) {
-    const r = await traer(ganador.url);
-    cabecera = r.texto?.slice(0, 5000) ?? null;
-  }
+  const resultados = await Promise.all([
+    inspeccionar(
+      'tipoPublicacion=NL (candidato)',
+      `${RAIZ}/_root.data?ci=all&fecha=${fecha}&tipoPublicacion=NL`,
+    ),
+    inspeccionar('ci=all (control)', `${RAIZ}/_root.data?ci=all&fecha=${fecha}`),
+    // Segunda página del candidato: confirma que `start` es el parámetro de
+    // paginación y no otro.
+    inspeccionar(
+      'tipoPublicacion=NL · página 2',
+      `${RAIZ}/_root.data?ci=all&fecha=${fecha}&tipoPublicacion=NL&start=20`,
+    ),
+  ]);
 
   return NextResponse.json(
-    {
-      recomendacion: ganador
-        ? `USAR "${ganador.nombre}" → ${ganador.url}. Es el único que devuelve publicaciones de rubro NL.`
-        : 'Ninguna variante trajo normas legales. Puede que hoy no se haya publicado el cuadernillo todavía (sale temprano), o que el parámetro sea otro. Reintentar con ?fecha=20260729 para descartar que sea un problema del día.',
-      fechaConsultada: fecha,
-      resultados,
-      cabeceraDelGanador: cabecera,
-      ejecutadoEn: new Date().toISOString(),
-    },
+    { fechaConsultada: fecha, resultados, ejecutadoEn: new Date().toISOString() },
     { status: 200 },
   );
 }
