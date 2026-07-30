@@ -10,6 +10,10 @@ import { obtenerSesion } from '@/lib/auth';
 export default async function Automatizaciones() {
   const sesion = await obtenerSesion();
   if (!sesion) redirect('/'); // el selector resuelve login / rol / baja
+  // Solo gerencia administra las automatizaciones: prende y apaga cada tarea y
+  // decide quién recibe los avisos. El resto de la empresa no entra aquí —
+  // únicamente recibe los correos, para lo cual no hace falta cuenta ni acceso.
+  if (sesion.usuario.rol !== 'gerencia') redirect('/');
 
   return (
     <main className="mx-auto w-full max-w-[860px] px-6 py-12">
