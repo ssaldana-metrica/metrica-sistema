@@ -115,18 +115,71 @@ export async function enviarCorreoInterno({
   }
 }
 
-// Plantilla mínima con la identidad de Métrica
-export function plantillaCorreo(titulo: string, contenido: string): string {
+// ── Plantilla con la identidad de Métrica ───────────────────────────────────
+//
+// La usan TODOS los correos del sistema: cotizaciones, aprobaciones, fichas,
+// control y el monitor de normas legales. Cambiar algo acá los cambia todos, y
+// eso es lo que se busca — que se vean como un mismo sistema.
+//
+// Los colores son los de `globals.css`, no una aproximación. La versión
+// anterior usaba un encabezado verde oscuro (#14201C) y grises verdosos que no
+// existen en la paleta: el sistema es navy (#001830) con grises azulados, así
+// que los correos se veían de otra marca.
+//
+// ── Sobre el logo ───────────────────────────────────────────────────────────
+// Va como imagen remota porque un correo no puede leer archivos del proyecto.
+// Casi todos los clientes bloquean las imágenes externas hasta que el
+// destinatario acepta, así que el `alt` está escrito para que se lea bien
+// cuando no cargue: dice "Métrica" en claro sobre el fondo oscuro, que es
+// exactamente lo que decía la versión anterior en texto. No se pierde nada.
+//
+// Si URL_SISTEMA no está definida, se omite la imagen y queda el texto: más
+// vale sin logo que con un enlace roto.
+const COLOR = {
+  navy: '#001830',
+  tinta: '#001830',
+  tintaSuave: '#3E4D63',
+  tintaTenue: '#7C8898',
+  linea: '#E6E8EA',
+  superficie: '#ECF0F4',
+  blancoTenue: '#B9C4D2',
+} as const;
+
+export function plantillaCorreo(
+  titulo: string,
+  contenido: string,
+  // Texto de vista previa: lo que el gestor de correo muestra junto al asunto
+  // en la bandeja, antes de abrir. Sin esto muestra la primera línea del
+  // cuerpo, que suele ser un aviso o una etiqueta y no dice nada útil.
+  vistaPrevia?: string,
+): string {
+  const base = limpiar(process.env.URL_SISTEMA)?.replace(/\/+$/, '');
+
+  const marca = base
+    ? `<img src="${base}/marca/logo-metrica-blanco.png" alt="Métrica"
+           width="104" height="53"
+           style="display:block;border:0;height:53px;width:104px;color:${COLOR.blancoTenue};font-size:16px;font-weight:700;" />`
+    : `<span style="color:#FFFFFF;font-weight:700;font-size:16px;">Métrica</span>`;
+
+  const preheader = vistaPrevia
+    ? `<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;height:0;width:0;">
+         ${escaparHtml(vistaPrevia)}
+       </div>`
+    : '';
+
   return `
-  <div style="font-family:system-ui,sans-serif;max-width:560px;margin:0 auto;color:#16201C;">
-    <div style="background:#14201C;border-radius:12px 12px 0 0;padding:18px 24px;">
-      <span style="color:#E8E5DB;font-weight:700;font-size:16px;">Métrica</span>
-      <span style="color:#A8B5AE;font-size:11px;margin-left:8px;">Sistema Operativo</span>
+  ${preheader}
+  <div style="font-family:system-ui,-apple-system,'Segoe UI',sans-serif;max-width:560px;margin:0 auto;color:${COLOR.tinta};">
+    <div style="background:${COLOR.navy};border-radius:12px 12px 0 0;padding:20px 24px 16px;">
+      ${marca}
+      <div style="color:${COLOR.blancoTenue};font-size:10px;letter-spacing:.16em;text-transform:uppercase;margin-top:8px;">
+        Sistema Operativo
+      </div>
     </div>
-    <div style="border:1px solid #E3E2DA;border-top:none;border-radius:0 0 12px 12px;padding:24px;">
-      <h2 style="font-size:16px;margin:0 0 12px;">${titulo}</h2>
+    <div style="border:1px solid ${COLOR.linea};border-top:none;border-radius:0 0 12px 12px;padding:24px;background:#FFFFFF;">
+      <h2 style="font-size:16px;margin:0 0 12px;color:${COLOR.tinta};">${titulo}</h2>
       ${contenido}
-      <p style="font-size:11px;color:#828B83;margin-top:24px;border-top:1px solid #EEEDE6;padding-top:12px;">
+      <p style="font-size:11px;line-height:1.6;color:${COLOR.tintaTenue};margin:24px 0 0;border-top:1px solid ${COLOR.linea};padding-top:12px;">
         Correo interno del sistema · no responder · ningún correo del sistema va a clientes
       </p>
     </div>
