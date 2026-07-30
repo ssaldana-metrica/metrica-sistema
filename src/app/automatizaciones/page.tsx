@@ -10,10 +10,14 @@ import { obtenerSesion } from '@/lib/auth';
 export default async function Automatizaciones() {
   const sesion = await obtenerSesion();
   if (!sesion) redirect('/'); // el selector resuelve login / rol / baja
-  // Solo gerencia administra las automatizaciones: prende y apaga cada tarea y
-  // decide quién recibe los avisos. El resto de la empresa no entra aquí —
-  // únicamente recibe los correos, para lo cual no hace falta cuenta ni acceso.
-  if (sesion.usuario.rol !== 'gerencia') redirect('/');
+
+  // Entra cualquier usuario activo: el equipo necesita poder confirmar que la
+  // tarea está corriendo, que el correo salió y ver el historial de corridas.
+  // Lo que NO puede hacer es administrar — prender y apagar la automatización,
+  // editar los términos vigilados o la lista de destinatarios es solo de
+  // gerencia. Esa frontera la sostiene el RLS (migración 0024), no esta
+  // pantalla; cuando se construya el panel, los controles de administración se
+  // dibujarán solo si sesion.usuario.rol === 'gerencia'.
 
   return (
     <main className="mx-auto w-full max-w-[860px] px-6 py-12">
