@@ -1,32 +1,29 @@
 import { NextResponse } from 'next/server';
 import { obtenerSesion } from '@/lib/auth';
 
-// ── Sonda de diagnóstico · ¿cómo está estructurado el dato? ──────────────────
+// ── Sonda de diagnóstico · encontrar el listado de NORMAS LEGALES del día ────
 //
-// Lo aprendido hasta aquí:
-//   V1 — Vercel llega a El Peruano sin bloqueo (200, con y sin cabeceras).
-//   V2 — El buscador es una app React Router v7; su HTML no trae marcado útil.
-//   V3 — Se puede pedir por fecha, y SOLO `ci=all` devuelve publicaciones
-//        (las variantes ci=full dieron cero códigos).
+// Lo aprendido:
+//   V1 — Vercel llega a El Peruano sin bloqueo.
+//   V2 — Es una app React Router v7; el HTML no trae marcado útil.
+//   V3 — Se puede pedir por fecha; solo `ci=all` devuelve publicaciones.
+//   V4 — El formato es turbo-stream y ya se leen los nombres de campo:
+//        op, fechaPublicacion, tipoDispositivo, sumilla, rubro,
+//        numeroDispositivo, nombreDispositivo, sector, urlPDF, clasificacion1..3
 //
-// V4 (esto): el payload de `_root.data` es turbo-stream, la serialización
-// interna de React Router: un arreglo plano donde los valores se referencian
-// por número ({"_219":552}). Rebanar el texto al azar no sirvió — las muestras
-// caían en la lista de opciones del desplegable de filtros, no en resultados.
+// EL PROBLEMA QUE ABRIÓ LA V4: los 13 resultados que devuelve
+// `_root.data?ci=all&fecha=…` son TODOS rubro "BO" — Boletín Oficial, o sea
+// sucesiones intestadas y avisos notariales. Ninguna norma legal. Por eso
+// /dispositivo/NL/<código>.data dio 404 y el mismo código bajo /BO/ dio 200:
+// el código era de Boletín, no de Normas Legales.
 //
-// Esta vuelta deja de mirar a ciegas y hace dos cosas concretas:
+// Los rubros del sistema son BO, EX, NL y SE. El monitor necesita NL, y hay
+// una ruta específica vista en el manifiesto del navegador:
+// /cuadernillo/NL/AAAAMMDD — el cuadernillo de Normas Legales del día.
 //
-//   1. Ubica los códigos de publicación (25xxxxx-N) dentro del listado del día
-//      y devuelve una VENTANA alrededor de los primeros. Así se ve si el
-//      título, la entidad y la fecha viven pegados al código o dispersos por
-//      el arreglo. De eso depende si un lector pragmático es viable.
-//
-//   2. Prueba la ruta de UNA norma suelta. En React Router v7 cada ruta tiene
-//      su gemela de datos añadiendo `.data`, así que /dispositivo/NL/2538536-1
-//      debería responder en /dispositivo/NL/2538536-1.data. Si ese payload es
-//      chico y legible, la estrategia cambia a mejor: sacar del listado solo
-//      los códigos del día y pedir cada norma por separado. Payloads pequeños,
-//      estructura simple y mucho menos que adivinar.
+// V5 (esto): probar las formas de pedir NL y quedarse con la que sirva. Se
+// mide en NORMAS, no en bytes: un payload grande lleno de opciones de filtro
+// no vale nada.
 //
 // Es temporal: se borra cuando el lector esté escrito.
 
@@ -53,7 +50,7 @@ function fechaLima(): string {
     .replaceAll('-', '');
 }
 
-async function traer(url: string, timeoutMs = 25_000) {
+async function traer(url: string, timeoutMs = 20_000) {
   try {
     const r = await fetch(url, {
       headers: NAVEGADOR,
@@ -61,8 +58,11 @@ async function traer(url: string, timeoutMs = 25_000) {
       cache: 'no-store',
       signal: AbortSignal.timeout(timeoutMs),
     });
-    const texto = r.ok ? await r.text() : null;
-    return { estado: r.status, tipo: r.headers.get('content-type'), texto };
+    return {
+      estado: r.status,
+      tipo: r.headers.get('content-type'),
+      texto: r.ok ? await r.text() : null,
+    };
   } catch (e) {
     return {
       estado: null,
@@ -73,7 +73,37 @@ async function traer(url: string, timeoutMs = 25_000) {
   }
 }
 
-const CODIGO = /\b\d{7}-\d\b/g;
+// Qué tan útil es un payload: no su tamaño, sino cuántas normas trae y de qué
+// rubro. La V4 enseñó que 87 KB pueden ser casi todo menú de filtros.
+function medir(texto: string) {
+  const codigos = [...new Set(texto.match(/\b\d{7}-\d\b/g) ?? [])];
+
+  // En turbo-stream el valor va justo después de su clave, así que
+  // "rubro","NL" pegados indican una publicación de Normas Legales.
+  const contar = (rubro: string) =>
+    (texto.match(new RegExp(`"rubro","${rubro}"`, 'g')) ?? []).length;
+
+  // Los tipos que de verdad importan para el monitor.
+  const tipos = [
+    ...new Set(
+      (
+        texto.match(
+          /"(DECRETO SUPREMO|RESOLUCI[ÓO]N MINISTERIAL|RESOLUCIONES MINISTERIALES|DECRETO DE URGENCIA|LEY|RESOLUCI[ÓO]N DIRECTORAL)"/gi,
+        ) ?? []
+      ).map((t) => t.replaceAll('"', '')),
+    ),
+  ];
+
+  return {
+    codigos: codigos.length,
+    primeros: codigos.slice(0, 5),
+    rubroNL: contar('NL'),
+    rubroBO: contar('BO'),
+    rubroEX: contar('EX'),
+    rubroSE: contar('SE'),
+    tiposVistos: tipos,
+  };
+}
 
 export async function GET(request: Request) {
   const sesion = await obtenerSesion();
@@ -84,69 +114,58 @@ export async function GET(request: Request) {
   const params = new URL(request.url).searchParams;
   const fecha = params.get('fecha') ?? fechaLima();
 
-  // ── 1. El listado del día ────────────────────────────────────────────────
-  const listadoUrl = `${RAIZ}/_root.data?ci=all&fecha=${fecha}`;
-  const listado = await traer(listadoUrl);
+  const candidatos = [
+    // La ruta dedicada del cuadernillo de Normas Legales: la más prometedora.
+    { nombre: 'cuadernillo NL', url: `${RAIZ}/cuadernillo/NL/${fecha}.data` },
+    { nombre: 'cuadernillo NL (sin .data)', url: `${RAIZ}/cuadernillo/NL/${fecha}` },
+    // Filtrar el listado general por rubro, con los nombres de parámetro más
+    // plausibles según los campos que ya conocemos.
+    { nombre: 'raíz rubro=NL', url: `${RAIZ}/_root.data?ci=all&fecha=${fecha}&rubro=NL` },
+    { nombre: 'raíz ci=NL', url: `${RAIZ}/_root.data?ci=NL&fecha=${fecha}` },
+    {
+      nombre: 'raíz tipoPublicacion=NL',
+      url: `${RAIZ}/_root.data?ci=all&fecha=${fecha}&tipoPublicacion=NL`,
+    },
+    // Control: el listado tal como lo probó la V4, para comparar.
+    { nombre: 'raíz ci=all (control)', url: `${RAIZ}/_root.data?ci=all&fecha=${fecha}` },
+  ];
 
-  if (!listado.texto) {
-    return NextResponse.json({
-      error: 'El listado del día no respondió.',
-      listadoUrl,
-      estado: listado.estado,
-    });
+  const resultados = await Promise.all(
+    candidatos.map(async (c) => {
+      const r = await traer(c.url);
+      if (!r.texto) {
+        return { ...c, estado: r.estado, tipo: r.tipo, bytes: 0, medicion: null, util: false };
+      }
+      const medicion = medir(r.texto);
+      return {
+        ...c,
+        estado: r.estado,
+        tipo: r.tipo,
+        bytes: r.texto.length,
+        medicion,
+        util: medicion.rubroNL > 0,
+      };
+    }),
+  );
+
+  const ganador = resultados.find((r) => r.util);
+
+  // Del ganador se devuelve el ARRANQUE del payload: la V4 enseñó que ahí
+  // viven la ruta y las claves, que es lo que hace falta para el decodificador.
+  let cabecera: string | null = null;
+  if (ganador) {
+    const r = await traer(ganador.url);
+    cabecera = r.texto?.slice(0, 5000) ?? null;
   }
-
-  const codigos = [...new Set(listado.texto.match(CODIGO) ?? [])];
-
-  // Ventanas alrededor de los primeros códigos: es donde se sabrá si el
-  // título y la entidad están cerca o hay que reconstruir referencias.
-  const ventanas = codigos.slice(0, 2).map((codigo) => {
-    const i = listado.texto!.indexOf(codigo);
-    return {
-      codigo,
-      posicion: i,
-      contexto: listado.texto!.slice(Math.max(0, i - 1400), i + 1400),
-    };
-  });
-
-  // ── 2. Una norma suelta, por su ruta de datos ────────────────────────────
-  // Se prueban las secciones conocidas: NL = Normas Legales (lo que interesa),
-  // BO = Boletín Oficial, EX y PC vistos en el manifiesto del navegador.
-  const codigoMuestra = params.get('codigo') ?? codigos[0];
-  const pruebasNorma = codigoMuestra
-    ? await Promise.all(
-        ['NL', 'BO'].map(async (seccion) => {
-          const url = `${RAIZ}/dispositivo/${seccion}/${codigoMuestra}.data`;
-          const r = await traer(url, 15_000);
-          return {
-            url,
-            estado: r.estado,
-            tipo: r.tipo,
-            bytes: r.texto?.length ?? 0,
-            // Un payload de una sola norma debería ser chico: si lo es, cabe
-            // casi entero aquí y se puede escribir el lector de una vez.
-            contenido: r.texto?.slice(0, 6000) ?? null,
-          };
-        }),
-      )
-    : [];
-
-  const algunaNormaSirve = pruebasNorma.some((p) => p.estado === 200 && p.bytes > 200);
 
   return NextResponse.json(
     {
-      recomendacion: algunaNormaSirve
-        ? 'La ruta por norma responde. Estrategia: sacar del listado los códigos del día y pedir cada norma por separado — payloads chicos y estructura simple.'
-        : codigos.length > 0
-          ? 'El listado trae códigos pero la ruta por norma no respondió. Habrá que decodificar el turbo-stream del listado; revisar las ventanas de contexto para ver qué tan cerca están título y entidad.'
-          : 'El listado no trajo ningún código con esta fecha. Puede que hoy no haya publicaciones; reintentar con ?fecha=20260730.',
+      recomendacion: ganador
+        ? `USAR "${ganador.nombre}" → ${ganador.url}. Es el único que devuelve publicaciones de rubro NL.`
+        : 'Ninguna variante trajo normas legales. Puede que hoy no se haya publicado el cuadernillo todavía (sale temprano), o que el parámetro sea otro. Reintentar con ?fecha=20260729 para descartar que sea un problema del día.',
       fechaConsultada: fecha,
-      listadoUrl,
-      totalCodigos: codigos.length,
-      codigos,
-      bytesListado: listado.texto.length,
-      ventanas,
-      pruebasNorma,
+      resultados,
+      cabeceraDelGanador: cabecera,
       ejecutadoEn: new Date().toISOString(),
     },
     { status: 200 },
