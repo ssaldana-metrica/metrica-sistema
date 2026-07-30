@@ -18,9 +18,9 @@ import {
 //   3. Lee las normas legales del día en El Peruano.
 //   4. Las compara contra los términos de cada cuenta.
 //   5. Guarda las nuevas, salteando las que ya vio (por `op`).
-//   6. Manda UN correo con todo lo pendiente de avisar, cada norma etiquetada
-//      con las cuentas que toca.
-//   7. Recién cuando el correo salió bien, las marca como avisadas.
+//   6. Reparte a los destinatarios en grupos y le manda a cada uno lo que le
+//      corresponde ver, con cada norma etiquetada según las cuentas que toca.
+//   7. Recién cuando TODOS los correos salieron bien, las marca como avisadas.
 //   8. Cierra la fila del historial.
 //
 // ── Por qué el orden 6-7 y no al revés ──────────────────────────────────────
@@ -77,18 +77,26 @@ function tarjetaNorma(n: FilaPendiente): string {
 
   const encabezado = [n.tipo, n.numero].filter(Boolean).map(escaparHtml).join(' ');
 
+  // La fecha va en cada tarjeta y no en la cabecera del correo: un mismo envío
+  // puede traer normas de varios días si el correo de una corrida anterior
+  // falló y estas quedaron pendientes.
+  const fecha = n.fecha_publicacion
+    ? `<div style="font-size:10px;color:#A8B5AE;margin-top:2px;">${escaparHtml(fechaIsoLegible(n.fecha_publicacion))}</div>`
+    : '';
+
   return `
   <div style="border:1px solid #E3E2DA;border-radius:10px;padding:14px 16px;margin-bottom:12px;">
     <div style="margin-bottom:8px;">${etiquetas}</div>
     ${encabezado ? `<div style="font-size:12px;font-weight:700;color:#16201C;">${encabezado}</div>` : ''}
     ${n.entidad ? `<div style="font-size:11px;color:#828B83;margin-top:2px;">${escaparHtml(n.entidad)}</div>` : ''}
+    ${fecha}
     <div style="font-size:13px;line-height:1.5;color:#16201C;margin-top:8px;">${escaparHtml(n.resumen || n.titulo)}</div>
     ${n.url ? `<div style="margin-top:10px;"><a href="${escaparHtml(n.url)}" style="font-size:12px;color:#B5501E;font-weight:600;">Ver el documento oficial →</a></div>` : ''}
     <div style="font-size:10px;color:#A8B5AE;margin-top:8px;font-family:monospace;">coincidió por — ${porQue}</div>
   </div>`;
 }
 
-function armarCorreo(pendientes: FilaPendiente[], fecha: string, esPrueba: boolean) {
+function armarCorreo(pendientes: FilaPendiente[], esPrueba: boolean) {
   const cuentas = [...new Set(pendientes.flatMap((p) => p.etiquetas.map((e) => e.cuenta)))].sort();
 
   const aviso = esPrueba
@@ -101,12 +109,12 @@ function armarCorreo(pendientes: FilaPendiente[], fecha: string, esPrueba: boole
   const cuerpo = `
     ${aviso}
     <p style="font-size:13px;color:#16201C;margin:0 0 4px;">
-      ${pendientes.length === 1 ? 'Se publicó 1 norma' : `Se publicaron ${pendientes.length} normas`}
-      que ${pendientes.length === 1 ? 'toca' : 'tocan'} ${cuentas.length === 1 ? 'la cuenta' : 'las cuentas'}
+      ${pendientes.length === 1 ? '1 norma' : `${pendientes.length} normas`}
+      ${pendientes.length === 1 ? 'toca' : 'tocan'} ${cuentas.length === 1 ? 'la cuenta' : 'las cuentas'}
       <strong>${cuentas.map(escaparHtml).join('</strong>, <strong>')}</strong>.
     </p>
     <p style="font-size:11px;color:#828B83;margin:0 0 18px;">
-      Diario Oficial El Peruano · Normas Legales · ${escaparHtml(fechaLegible(fecha))}
+      Diario Oficial El Peruano · Normas Legales
     </p>
     ${pendientes.map(tarjetaNorma).join('')}`;
 
@@ -117,10 +125,10 @@ function armarCorreo(pendientes: FilaPendiente[], fecha: string, esPrueba: boole
   return { asunto: esPrueba ? `[PRUEBA] ${asunto}` : asunto, html: plantillaCorreo('Monitor de normas legales', cuerpo) };
 }
 
-function fechaLegible(aaaammdd: string): string {
-  if (!/^\d{8}$/.test(aaaammdd)) return aaaammdd;
-  const [a, m, d] = [aaaammdd.slice(0, 4), aaaammdd.slice(4, 6), aaaammdd.slice(6, 8)];
-  return `${d}/${m}/${a}`;
+/** "2026-07-30" (como lo guarda la base) → "30/07/2026". */
+function fechaIsoLegible(iso: string): string {
+  const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : iso;
 }
 
 // ── La corrida ──────────────────────────────────────────────────────────────
@@ -223,8 +231,8 @@ export async function correrMonitorNormas(
       };
     }
 
-    const destinatarios = await resolverDestinatarios(db, esPrueba, pendientes);
-    if (destinatarios.length === 0) {
+    const grupos = await armarGrupos(db, esPrueba, pendientes);
+    if (grupos.length === 0) {
       await cerrar({
         estado: 'error',
         normas_encontradas: normas.length,
@@ -234,20 +242,33 @@ export async function correrMonitorNormas(
       return { corrio: true, fecha, motivo: 'Sin destinatarios activos' };
     }
 
-    const { asunto, html } = armarCorreo(pendientes, fecha, esPrueba);
-    const envio = await enviarCorreoInterno({ para: destinatarios, asunto, html });
+    const detalles: string[] = [];
+    const fallos: string[] = [];
 
-    if (!envio.enviado) {
-      // Los hallazgos quedan SIN marcar a propósito: la próxima corrida
-      // reintenta en vez de darlos por avisados.
+    for (const grupo of grupos) {
+      const { asunto, html } = armarCorreo(grupo.pendientes, esPrueba);
+      const envio = await enviarCorreoInterno({ para: grupo.correos, asunto, html });
+      if (envio.enviado) detalles.push(envio.detalle);
+      else fallos.push(`${grupo.etiqueta}: ${envio.detalle}`);
+    }
+
+    if (fallos.length > 0) {
+      // Nada se marca como avisado: la próxima corrida reintenta.
+      //
+      // El precio es que si un grupo sí recibió el correo, mañana lo verá
+      // repetido. Se acepta a propósito: una norma legal duplicada es una
+      // molestia, una norma que nadie vio puede costar una oportunidad o una
+      // multa. Ante la duda, repetir.
       await cerrar({
         estado: 'error',
         normas_encontradas: normas.length,
         normas_relevantes: relevantes.length,
-        error_detalle: `No se pudo enviar el correo: ${envio.detalle}`,
+        error_detalle: `No se pudo enviar a ${fallos.length} de ${grupos.length} grupos — ${fallos.join(' | ')}`,
       });
-      return { corrio: true, fecha, motivo: envio.detalle };
+      return { corrio: true, fecha, motivo: fallos.join(' | ') };
     }
+
+    const resumenEnvio = detalles.join(' | ');
 
     // 6. Recién ahora quedan avisadas.
     await db
@@ -259,7 +280,7 @@ export async function correrMonitorNormas(
       estado: 'ok',
       normas_encontradas: normas.length,
       normas_relevantes: relevantes.length,
-      error_detalle: envio.detalle,
+      error_detalle: resumenEnvio,
     });
 
     return {
@@ -268,7 +289,7 @@ export async function correrMonitorNormas(
       normasEncontradas: normas.length,
       normasRelevantes: relevantes.length,
       nuevas,
-      correo: envio.detalle,
+      correo: resumenEnvio,
     };
   } catch (e) {
     const detalle = e instanceof Error ? `${e.name}: ${e.message}` : 'error desconocido';
@@ -378,29 +399,60 @@ async function leerPendientes(db: ClienteAdmin): Promise<FilaPendiente[]> {
   });
 }
 
-async function resolverDestinatarios(
+/** Un correo a enviar: a quiénes va y con qué normas dentro. */
+type GrupoEnvio = { etiqueta: string; correos: string[]; pendientes: FilaPendiente[] };
+
+/**
+ * Reparte los destinatarios en grupos según lo que a cada uno le corresponde
+ * ver, y a cada grupo le arma SU propia lista de normas.
+ *
+ * Un destinatario sin cuenta asignada recibe el correo completo. Uno con
+ * cuenta recibe únicamente las normas que tocan esa cuenta — no basta con
+ * decidir SI le llega el correo, hay que recortarle el contenido, o alguien
+ * suscrito solo a SPGL terminaría leyendo las normas eléctricas de KALLPA.
+ */
+async function armarGrupos(
   db: ClienteAdmin,
   esPrueba: boolean,
   pendientes: FilaPendiente[],
-): Promise<string[]> {
+): Promise<GrupoEnvio[]> {
   // En modo prueba no se consulta la lista siquiera: así no hay manera de que
   // un correo de prueba se escape a los demás por un descuido.
-  if (esPrueba) return [CORREO_PRUEBA_MONITOR];
+  if (esPrueba) {
+    return [{ etiqueta: 'prueba', correos: [CORREO_PRUEBA_MONITOR], pendientes }];
+  }
 
   const { data } = await db
     .from('normas_legales_destinatarios')
     .select('correo, cuenta_id, normas_legales_cuentas ( nombre )')
     .eq('activo', true);
 
-  const cuentasTocadas = new Set(pendientes.flatMap((p) => p.etiquetas.map((e) => e.cuenta)));
+  const todos: string[] = [];
+  const porCuenta = new Map<string, string[]>();
 
-  return (data ?? [])
-    .filter((d) => {
-      // Sin cuenta asignada = recibe todo.
-      if (!d.cuenta_id) return true;
-      const nombre = (d.normas_legales_cuentas as unknown as { nombre: string } | null)?.nombre;
-      // Con cuenta = solo si hay algo de SU cuenta en esta tanda.
-      return nombre ? cuentasTocadas.has(nombre) : false;
-    })
-    .map((d) => d.correo as string);
+  for (const d of data ?? []) {
+    const correo = d.correo as string;
+    if (!d.cuenta_id) {
+      todos.push(correo);
+      continue;
+    }
+    const nombre = (d.normas_legales_cuentas as unknown as { nombre: string } | null)?.nombre;
+    if (!nombre) continue; // cuenta borrada: sin ella no se sabe qué mandarle
+    if (!porCuenta.has(nombre)) porCuenta.set(nombre, []);
+    porCuenta.get(nombre)!.push(correo);
+  }
+
+  const grupos: GrupoEnvio[] = [];
+
+  if (todos.length > 0) {
+    grupos.push({ etiqueta: 'lista completa', correos: todos, pendientes });
+  }
+
+  for (const [cuenta, correos] of porCuenta) {
+    const suyas = pendientes.filter((p) => p.etiquetas.some((e) => e.cuenta === cuenta));
+    // Si esta tanda no trae nada de su cuenta, no se le escribe.
+    if (suyas.length > 0) grupos.push({ etiqueta: cuenta, correos, pendientes: suyas });
+  }
+
+  return grupos;
 }
