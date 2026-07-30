@@ -1,0 +1,68 @@
+name: Monitor de normas legales
+
+# Dispara el monitor dos veces al día. La Action SOLO dispara: hace el POST y
+# se va. Todo el trabajo —leer El Peruano, clasificar, enviar el correo— ocurre
+# en Vercel.
+#
+# Por qué así y no con Vercel Cron: el proyecto está en el plan Hobby, que no
+# permite dos corridas diarias.
+#
+# Por qué el trabajo se queda en Vercel: la lectura de El Peruano se verificó
+# desde Vercel (región gru1, São Paulo). Los runners de GitHub salen por otra
+# red y no se ha comprobado que El Peruano los atienda igual.
+
+on:
+  schedule:
+    # Los horarios de GitHub son UTC y Lima es UTC−5, sin horario de verano.
+    - cron: '0 13 * * *' #  8:00 en Lima
+    - cron: '0 23 * * *' # 18:00 en Lima
+  # Permite dispararlo a mano desde la pestaña Actions, para probar o para
+  # recuperar un día que falló.
+  workflow_dispatch:
+    inputs:
+      fecha:
+        description: 'Fecha a procesar en formato AAAAMMDD (vacío = hoy en Lima)'
+        required: false
+        type: string
+
+# Si una corrida se demora y entra la siguiente, que no se pisen.
+concurrency:
+  group: normas-legales
+  cancel-in-progress: false
+
+jobs:
+  disparar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Pedir la corrida al sistema
+        env:
+          URL: ${{ secrets.URL_SISTEMA }}
+          SECRETO: ${{ secrets.CRON_SECRET }}
+          FECHA: ${{ inputs.fecha }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${URL:-}" ] || [ -z "${SECRETO:-}" ]; then
+            echo "Faltan los secretos URL_SISTEMA o CRON_SECRET en el repositorio."
+            exit 1
+          fi
+
+          destino="${URL%/}/api/automatizaciones/normas-legales"
+          [ -n "${FECHA:-}" ] && destino="${destino}?fecha=${FECHA}"
+
+          echo "Disparando: ${destino}"
+
+          # --fail-with-body: que un 500 marque el paso como fallido pero
+          # igual imprima la respuesta, que es donde viene el motivo.
+          # Reintentos por si Vercel está arrancando una función fría.
+          curl --fail-with-body \
+               --silent --show-error \
+               --retry 3 --retry-delay 10 --retry-connrefused \
+               --max-time 120 \
+               -X POST "${destino}" \
+               -H "Authorization: Bearer ${SECRETO}" \
+               -H "Content-Type: application/json" \
+            | tee respuesta.json
+
+          echo ""
+          echo "Corrida solicitada."
