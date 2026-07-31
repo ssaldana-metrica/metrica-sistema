@@ -20,6 +20,13 @@ export type DatosPdfOda = {
   codigo: string;
   fechaEmision: string | null;
   comprobante: TipoComprobante;
+  /**
+   * Cláusulas al pie. Si no viene, se usan las de las ODA de proyecto
+   * (`CLAUSULAS_ODA`). Las ODA de proveedores pasan las suyas: comparten la
+   * hoja pero no todas las condiciones — a una suscripción de software no le
+   * corresponde el código de detracción de servicios de influencers.
+   */
+  clausulas?: readonly string[];
   proveedor: {
     razonSocial: string;
     nombreComercial: string;
@@ -267,7 +274,7 @@ function Documento({ d }: { d: DatosPdfOda }) {
         ) : null}
 
         <Text style={s.seccion}>Cláusulas</Text>
-        {CLAUSULAS_ODA.map((t, i) => (
+        {(d.clausulas ?? CLAUSULAS_ODA).map((t, i) => (
           <View key={i} style={s.intro} wrap={false}>
             <Text style={s.introBullet}>•</Text>
             <Text style={s.introTexto}>{t}</Text>

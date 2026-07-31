@@ -8,6 +8,7 @@ import { generarPdfOda } from '@/lib/pdf-oda';
 import { redondear, type Moneda } from '@/lib/calculos';
 import type { TipoComprobante } from '@/config/impuestos';
 import {
+  CLAUSULAS_ODA_PROVEEDOR,
   ETIQUETA_TIPO_PROVEEDOR,
   montoAlcanzaMinimo,
   textoMinimo,
@@ -232,6 +233,9 @@ export async function emitirOrdenProveedor(id: string): Promise<ResultadoEmitir>
       codigo: o.codigo as string,
       fechaEmision: new Date().toISOString(),
       comprobante: (o.tipo_comprobante as TipoComprobante) ?? 'factura',
+      // Las de este módulo, no las de proyecto: comparten la hoja pero no
+      // todas las condiciones.
+      clausulas: CLAUSULAS_ODA_PROVEEDOR,
       proveedor: {
         razonSocial: (o.razon_social as string) ?? '',
         nombreComercial: (o.nombre_comercial as string) ?? '',
