@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -59,14 +60,32 @@ const ICONOS: Record<string, React.ReactNode> = {
   ),
 };
 
+export type SubItemNav = { href: string; etiqueta: string };
+
 export type ItemNav = {
+  /** Adónde lleva. Si el ítem tiene `sub`, no navega: sirve de raíz para saber
+   *  cuándo está activo y para agrupar. */
   href: string;
   etiqueta: string;
   icono: keyof typeof ICONOS;
   badge?: number;
+  /** Si viene, el ítem no es un enlace sino un desplegable. */
+  sub?: SubItemNav[];
 };
 
 export type GrupoNav = { titulo: string; items: ItemNav[] };
+
+const Chevron = ({ abierto }: { abierto: boolean }) => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2.4"
+    className={`ml-auto h-3 w-3 shrink-0 transition-transform ${abierto ? 'rotate-90' : ''}`}
+  >
+    <path d="m9 18 6-6-6-6" />
+  </svg>
+);
 
 export function Sidebar({
   grupos,
@@ -76,6 +95,11 @@ export function Sidebar({
   onNavegar?: () => void;
 }) {
   const ruta = usePathname();
+
+  // Qué desplegables abrió o cerró quien navega. Lo que NO está acá cae al
+  // valor por defecto: abierto si alguna de sus secciones es la ruta actual,
+  // para que al entrar por un enlace directo el menú muestre dónde estás.
+  const [abiertos, setAbiertos] = useState<Record<string, boolean>>({});
 
   return (
     <aside className="flex h-full w-[248px] shrink-0 flex-col overflow-y-auto bg-lateral py-6">
@@ -109,18 +133,10 @@ export function Sidebar({
           {grupo.items.map((item) => {
             const activo =
               ruta === item.href || ruta.startsWith(item.href + '/');
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={onNavegar}
-                className={`relative flex w-full items-center gap-3 rounded-lg px-2.5 py-2.5 text-[13.5px] font-medium transition ${
-                  activo
-                    ? 'bg-lateral-claro text-lateral-activo'
-                    : 'text-lateral-texto hover:bg-lateral-claro hover:text-lateral-activo'
-                }`}
-              >
-                {activo && (
+
+            const contenido = (
+              <>
+                {activo && !item.sub && (
                   <span className="absolute -left-3.5 top-1/2 h-[18px] w-[3px] -translate-y-1/2 rounded-r bg-petroleo" />
                 )}
                 <span className="h-[17px] w-[17px] shrink-0 opacity-85 [&_svg]:h-full [&_svg]:w-full">
@@ -132,6 +148,80 @@ export function Sidebar({
                     {item.badge}
                   </span>
                 )}
+              </>
+            );
+
+            const clases = `relative flex w-full items-center gap-3 rounded-lg px-2.5 py-2.5 text-left text-[13.5px] font-medium transition ${
+              activo
+                ? 'bg-lateral-claro text-lateral-activo'
+                : 'text-lateral-texto hover:bg-lateral-claro hover:text-lateral-activo'
+            }`;
+
+            // Ítem desplegable: no lleva a ninguna parte. Se abre y quien lo
+            // usa elige a cuál de sus dos secciones entrar, en vez de caer en
+            // una por defecto y tener que corregir el rumbo.
+            if (item.sub) {
+              const abierto = abiertos[item.href] ?? activo;
+              return (
+                <div key={item.href}>
+                  <button
+                    type="button"
+                    aria-expanded={abierto}
+                    onClick={() =>
+                      setAbiertos((a) => ({ ...a, [item.href]: !abierto }))
+                    }
+                    className={clases}
+                  >
+                    {contenido}
+                    <Chevron abierto={abierto} />
+                  </button>
+
+                  {abierto && (
+                    <div className="mb-1 mt-0.5 space-y-0.5 pl-[30px]">
+                      {item.sub.map((s) => {
+                        // Se marca la coincidencia MÁS LARGA, no la primera.
+                        // Sin esto, una sección en /ordenes se vería activa
+                        // también al estar en /ordenes/proveedores, porque su
+                        // ruta es prefijo de la otra: las dos aparecerían
+                        // encendidas a la vez.
+                        const coincide = (h: string) =>
+                          ruta === h || ruta.startsWith(h + '/');
+                        const masLarga = item
+                          .sub!.filter((o) => coincide(o.href))
+                          .sort((a, b) => b.href.length - a.href.length)[0];
+                        const subActivo = masLarga?.href === s.href;
+                        return (
+                          <Link
+                            key={s.href}
+                            href={s.href}
+                            onClick={onNavegar}
+                            className={`relative flex items-center rounded-lg px-2.5 py-2 text-[13px] transition ${
+                              subActivo
+                                ? 'bg-lateral-claro font-semibold text-lateral-activo'
+                                : 'text-lateral-texto hover:bg-lateral-claro hover:text-lateral-activo'
+                            }`}
+                          >
+                            {subActivo && (
+                              <span className="absolute -left-[16px] top-1/2 h-[14px] w-[3px] -translate-y-1/2 rounded-r bg-petroleo" />
+                            )}
+                            {s.etiqueta}
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            }
+
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={onNavegar}
+                className={clases}
+              >
+                {contenido}
               </Link>
             );
           })}
