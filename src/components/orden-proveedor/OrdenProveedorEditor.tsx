@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   anularOrdenProveedor,
+  eliminarOrdenProveedor,
   emitirOrdenProveedor,
   guardarOrdenProveedor,
   reabrirOrdenProveedor,
@@ -138,6 +139,29 @@ export function OrdenProveedorEditor(props: OrdenProveedorEditorProps) {
       else {
         toast({ tipo: 'info', texto: 'Orden anulada.' });
         router.refresh();
+      }
+    });
+  }
+
+  function borrar() {
+    // Confirmación con el código escrito: borrar no tiene vuelta atrás, y
+    // conviene que quien pulsa vea qué orden va a desaparecer.
+    if (
+      !confirm(
+        `Borrar la orden ${props.codigo} por completo.\n\n` +
+          'Desaparece del sistema con todo su detalle y no se puede recuperar. ' +
+          'El número no se reutiliza.\n\n' +
+          'Si la orden ya salió al proveedor, usa Anular en vez de Borrar: así queda registrada con su motivo.',
+      )
+    )
+      return;
+    setError(null);
+    startTransition(async () => {
+      const r = await eliminarOrdenProveedor(props.ordenId);
+      if ('error' in r) setError(r.error);
+      else {
+        toast({ tipo: 'info', texto: `Orden ${props.codigo} borrada.` });
+        router.push('/ordenes/proveedores');
       }
     });
   }
@@ -425,12 +449,23 @@ export function OrdenProveedorEditor(props: OrdenProveedorEditorProps) {
         </Tarjeta>
 
         <div className="flex flex-wrap items-center justify-end gap-2.5">
+          {/* Borrar y Anular resuelven cosas distintas y por eso conviven:
+              anular deja constancia de una orden que existió y salió; borrar
+              hace desaparecer la que nunca debió crearse. */}
+          <button
+            onClick={borrar}
+            disabled={ocupado}
+            title="Elimina la orden por completo. Úsalo solo si nunca salió al proveedor."
+            className="mr-auto rounded-lg px-3 py-2 text-[13px] font-semibold text-tinta-tenue transition hover:bg-rojo-fondo hover:text-rojo disabled:opacity-60"
+          >
+            Borrar
+          </button>
           {props.estado !== 'anulada' && (
             <button
               onClick={anular}
               disabled={ocupado}
-              title="Cierra la orden definitivamente. El código no se reutiliza."
-              className="mr-auto rounded-lg border border-rojo/30 bg-white px-4 py-2 text-[13px] font-semibold text-rojo transition hover:bg-rojo-fondo disabled:opacity-60"
+              title="Deja la orden sin efecto pero la conserva a la vista, con su motivo."
+              className="rounded-lg border border-rojo/30 bg-white px-4 py-2 text-[13px] font-semibold text-rojo transition hover:bg-rojo-fondo disabled:opacity-60"
             >
               Anular
             </button>

@@ -314,10 +314,8 @@ export async function reabrirOrdenProveedor(id: string): Promise<Resultado> {
 
 // ── Anular ──────────────────────────────────────────────────────────────────
 
-// A diferencia de las ODA de proyecto, que no se anulan sueltas porque viven
-// dentro de una ficha, estas sí: no hay proceso que las contenga, así que una
-// orden equivocada necesita poder cerrarse. El código queda anulado para
-// siempre — nunca se reutiliza — igual que en el resto del sistema.
+// ANULAR: la orden salió y hay que dejarla sin efecto, pero queda a la vista
+// con su motivo. Es lo correcto cuando el proveedor ya recibió el documento.
 export async function anularOrdenProveedor(
   id: string,
   motivo: string,
@@ -329,13 +327,6 @@ export async function anularOrdenProveedor(
   const razon = motivo.trim();
   if (!razon) return { error: 'El motivo de anulación es obligatorio.' };
 
-  const { data: orden } = await c.supabase
-    .from('ordenes_proveedores')
-    .select('codigo')
-    .eq('id', id)
-    .maybeSingle();
-  if (!orden) return { error: 'No se encontró la orden.' };
-
   const { error } = await c.supabase
     .from('ordenes_proveedores')
     .update({ estado: 'anulada', anulada_por: c.usuarioId, motivo_anulacion: razon })
@@ -343,13 +334,44 @@ export async function anularOrdenProveedor(
     .neq('estado', 'anulada'); // candado
   if (error) return { error: 'No se pudo anular la orden.' };
 
-  const { error: errCodigo } = await c.supabase
-    .from('banco_codigos_oda_prov')
-    .update({ estado: 'anulado' })
-    .eq('codigo', orden.codigo as string);
-  if (errCodigo) return { error: 'La orden se anuló pero el código quedó en uso. Avisa a soporte.' };
-
   revalidatePath(`/ordenes/proveedores/${id}`);
+  revalidatePath('/ordenes/proveedores');
+  return { ok: true };
+}
+
+// BORRAR: la orden desaparece por completo, con sus líneas de detalle (se van
+// solas por la cascada).
+//
+// Es la excepción a la regla de "anule, no borre" del resto del sistema, y
+// existe porque gerencia la pidió: son órdenes internas que no alimentan la
+// facturación de ningún proyecto ni la tabla de control.
+//
+// El número NO se recicla. El contador solo sube, así que borrar deja un hueco
+// en la numeración en vez de permitir que dos documentos distintos lleven el
+// mismo código — y si esa orden alcanzó a imprimirse, el hueco es inofensivo y
+// el duplicado no lo sería.
+//
+// Se borra el PDF del almacén también: dejarlo huérfano ocuparía espacio para
+// siempre sin que nada apunte a él.
+export async function eliminarOrdenProveedor(id: string): Promise<Resultado> {
+  const c = await ctx(id);
+  if (!c.ok) return { error: c.error };
+
+  const { data: orden } = await c.supabase
+    .from('ordenes_proveedores')
+    .select('pdf_url')
+    .eq('id', id)
+    .maybeSingle();
+
+  const { error } = await c.supabase.from('ordenes_proveedores').delete().eq('id', id);
+  if (error) return { error: 'No se pudo borrar la orden.' };
+
+  if (orden?.pdf_url) {
+    // Si esto falla, la orden ya no existe y solo queda un archivo suelto: no
+    // vale la pena devolver un error por eso.
+    await crearClienteAdmin().storage.from('ordenes').remove([orden.pdf_url as string]);
+  }
+
   revalidatePath('/ordenes/proveedores');
   return { ok: true };
 }
