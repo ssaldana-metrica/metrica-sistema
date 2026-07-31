@@ -20,11 +20,29 @@ export type DatosPdfOda = {
   codigo: string;
   fechaEmision: string | null;
   comprobante: TipoComprobante;
+  /**
+   * Cláusulas al pie. Si no viene, se usan las de las ODA de proyecto
+   * (`CLAUSULAS_ODA`). Las ODA de proveedores pasan las suyas: comparten la
+   * hoja pero no todas las condiciones — a una suscripción de software no le
+   * corresponde el código de detracción de servicios de influencers.
+   */
+  clausulas?: readonly string[];
   proveedor: {
     razonSocial: string;
     nombreComercial: string;
     ruc: string;
-    tipo: TipoProveedorImp;
+    /**
+     * ODA de proyecto: 'empresa' o 'persona_natural'. Opcional porque las ODA
+     * de proveedores no manejan esa distinción — ver `etiquetaTipo`.
+     */
+    tipo?: TipoProveedorImp;
+    /**
+     * Qué escribir en el campo "Tipo" del PDF, cuando no es empresa ni persona
+     * natural. Lo usan las ODA de Proveedores para imprimir ahí el rubro del
+     * gasto (Suscripciones, Corresponsales, …), que es el dato que les
+     * corresponde. Si viene, manda sobre `tipo`.
+     */
+    etiquetaTipo?: string;
     banco: string;
     cuenta: string;
     cci: string;
@@ -170,7 +188,10 @@ function Documento({ d }: { d: DatosPdfOda }) {
           <Dato k="RUC" v={d.proveedor.ruc || '—'} />
           <Dato
             k="Tipo"
-            v={d.proveedor.tipo === 'persona_natural' ? 'Persona natural' : 'Empresa'}
+            v={
+              d.proveedor.etiquetaTipo ??
+              (d.proveedor.tipo === 'persona_natural' ? 'Persona natural' : 'Empresa')
+            }
           />
           <Dato
             k="Comprobante"
@@ -253,7 +274,7 @@ function Documento({ d }: { d: DatosPdfOda }) {
         ) : null}
 
         <Text style={s.seccion}>Cláusulas</Text>
-        {CLAUSULAS_ODA.map((t, i) => (
+        {(d.clausulas ?? CLAUSULAS_ODA).map((t, i) => (
           <View key={i} style={s.intro} wrap={false}>
             <Text style={s.introBullet}>•</Text>
             <Text style={s.introTexto}>{t}</Text>

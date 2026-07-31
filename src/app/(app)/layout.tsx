@@ -68,7 +68,23 @@ export default async function LayoutProtegido({
           icono: 'aprobaciones',
           badge: pendientes,
         },
-        { href: '/ordenes', etiqueta: 'Órdenes (ODA)', icono: 'ordenes' },
+        {
+          // Desplegable: no lleva a ninguna parte por sí solo. Son dos mundos
+          // distintos —las de proyecto nacen de una ficha, las de proveedores
+          // se crean sueltas para el gasto de la casa— y quien entra elige a
+          // cuál va, en vez de caer en una por defecto.
+          href: '/ordenes',
+          etiqueta: 'Órdenes (ODA)',
+          icono: 'ordenes',
+          sub: [
+            // Proyectos se queda en /ordenes, su ruta de siempre: moverla
+            // obligaría a tocar ocho referencias repartidas por acciones y
+            // componentes de un módulo que funciona. La subcarpeta es de
+            // navegación, no de URL.
+            { href: '/ordenes', etiqueta: 'Proyectos' },
+            { href: '/ordenes/proveedores', etiqueta: 'Proveedores' },
+          ],
+        },
         { href: '/control', etiqueta: 'Tabla de control', icono: 'control' },
       ],
     });
