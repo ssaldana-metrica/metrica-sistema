@@ -65,11 +65,9 @@ export default async function PaginaAprobaciones() {
           ningún correo va al cliente.
         </p>
       </div>
-      <ColaAprobacion
-        pendientes={pendientes}
-        usuarioId={usuario.id}
-        sinRestriccion={usuario.rol === 'gerencia'}
-      />
+      {/* Ya no se pasa exención por rol: desde la migración 0030 nadie aprueba
+          lo suyo, gerencia incluida. La cola filtra igual para todos. */}
+      <ColaAprobacion pendientes={pendientes} usuarioId={usuario.id} />
     </div>
   );
 }
