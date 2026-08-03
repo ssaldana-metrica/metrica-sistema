@@ -65,7 +65,7 @@ function tarjetaNorma(n: FilaPendiente): string {
   const etiquetas = n.etiquetas
     .map(
       (e) =>
-        `<span style="display:inline-block;background:#14201C;color:#E8E5DB;font-size:10px;font-weight:700;letter-spacing:.08em;padding:3px 8px;border-radius:5px;margin-right:6px;">${escaparHtml(e.cuenta)}</span>`,
+        `<span style="display:inline-block;background:#001830;color:#FFFFFF;font-size:10px;font-weight:700;letter-spacing:.08em;padding:3px 8px;border-radius:5px;margin-right:6px;">${escaparHtml(e.cuenta)}</span>`,
     )
     .join('');
 
@@ -81,18 +81,18 @@ function tarjetaNorma(n: FilaPendiente): string {
   // puede traer normas de varios días si el correo de una corrida anterior
   // falló y estas quedaron pendientes.
   const fecha = n.fecha_publicacion
-    ? `<div style="font-size:10px;color:#A8B5AE;margin-top:2px;">${escaparHtml(fechaIsoLegible(n.fecha_publicacion))}</div>`
+    ? `<div style="font-size:10px;color:#7C8898;margin-top:2px;">${escaparHtml(fechaIsoLegible(n.fecha_publicacion))}</div>`
     : '';
 
   return `
-  <div style="border:1px solid #E3E2DA;border-radius:10px;padding:14px 16px;margin-bottom:12px;">
+  <div style="border:1px solid #E6E8EA;border-radius:10px;padding:14px 16px;margin-bottom:12px;">
     <div style="margin-bottom:8px;">${etiquetas}</div>
-    ${encabezado ? `<div style="font-size:12px;font-weight:700;color:#16201C;">${encabezado}</div>` : ''}
-    ${n.entidad ? `<div style="font-size:11px;color:#828B83;margin-top:2px;">${escaparHtml(n.entidad)}</div>` : ''}
+    ${encabezado ? `<div style="font-size:12px;font-weight:700;color:#001830;">${encabezado}</div>` : ''}
+    ${n.entidad ? `<div style="font-size:11px;color:#7C8898;margin-top:2px;">${escaparHtml(n.entidad)}</div>` : ''}
     ${fecha}
-    <div style="font-size:13px;line-height:1.5;color:#16201C;margin-top:8px;">${escaparHtml(n.resumen || n.titulo)}</div>
-    ${n.url ? `<div style="margin-top:10px;"><a href="${escaparHtml(n.url)}" style="font-size:12px;color:#B5501E;font-weight:600;">Ver el documento oficial →</a></div>` : ''}
-    <div style="font-size:10px;color:#A8B5AE;margin-top:8px;font-family:monospace;">coincidió por — ${porQue}</div>
+    <div style="font-size:13px;line-height:1.5;color:#001830;margin-top:8px;">${escaparHtml(n.resumen || n.titulo)}</div>
+    ${n.url ? `<div style="margin-top:10px;"><a href="${escaparHtml(n.url)}" style="font-size:12px;color:#C2683A;font-weight:600;">Ver el documento oficial →</a></div>` : ''}
+    <div style="font-size:10px;color:#7C8898;margin-top:8px;font-family:monospace;">coincidió por — ${porQue}</div>
   </div>`;
 }
 
@@ -100,7 +100,7 @@ function armarCorreo(pendientes: FilaPendiente[], esPrueba: boolean) {
   const cuentas = [...new Set(pendientes.flatMap((p) => p.etiquetas.map((e) => e.cuenta)))].sort();
 
   const aviso = esPrueba
-    ? `<p style="background:#F6ECD2;color:#B5821E;padding:10px 14px;border-radius:8px;font-family:monospace;font-size:11px;">
+    ? `<p style="background:#F6ECD2;color:#9A6A12;padding:10px 14px;border-radius:8px;font-family:monospace;font-size:11px;">
          MODO PRUEBA · este aviso solo se envió a ${escaparHtml(CORREO_PRUEBA_MONITOR)}.
          Apágalo en Automatizaciones para que llegue a toda la lista.
        </p>`
@@ -108,12 +108,12 @@ function armarCorreo(pendientes: FilaPendiente[], esPrueba: boolean) {
 
   const cuerpo = `
     ${aviso}
-    <p style="font-size:13px;color:#16201C;margin:0 0 4px;">
+    <p style="font-size:13px;color:#001830;margin:0 0 4px;">
       ${pendientes.length === 1 ? '1 norma' : `${pendientes.length} normas`}
       ${pendientes.length === 1 ? 'toca' : 'tocan'} ${cuentas.length === 1 ? 'la cuenta' : 'las cuentas'}
       <strong>${cuentas.map(escaparHtml).join('</strong>, <strong>')}</strong>.
     </p>
-    <p style="font-size:11px;color:#828B83;margin:0 0 18px;">
+    <p style="font-size:11px;color:#7C8898;margin:0 0 18px;">
       Diario Oficial El Peruano · Normas Legales
     </p>
     ${pendientes.map(tarjetaNorma).join('')}`;
@@ -122,7 +122,21 @@ function armarCorreo(pendientes: FilaPendiente[], esPrueba: boolean) {
     pendientes.length === 1 ? 'norma' : 'normas'
   }`;
 
-  return { asunto: esPrueba ? `[PRUEBA] ${asunto}` : asunto, html: plantillaCorreo('Monitor de normas legales', cuerpo) };
+  // Lo que se lee en la bandeja junto al asunto, sin abrir el correo. Se
+  // adelantan las primeras normas para poder decidir desde ahí si urge o no;
+  // por defecto el gestor mostraría la primera línea del cuerpo, que cuando
+  // hay modo prueba es el aviso amarillo y no dice nada del contenido.
+  const vistaPrevia = pendientes
+    .slice(0, 3)
+    .map((p) => (p.entidad ? `${p.entidad}: ` : '') + (p.resumen || p.titulo))
+    .join(' · ')
+    .replace(/\s+/g, ' ')
+    .slice(0, 200);
+
+  return {
+    asunto: esPrueba ? `[PRUEBA] ${asunto}` : asunto,
+    html: plantillaCorreo('Monitor de normas legales', cuerpo, vistaPrevia),
+  };
 }
 
 /** "2026-07-30" (como lo guarda la base) → "30/07/2026". */
