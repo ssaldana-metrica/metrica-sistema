@@ -59,7 +59,7 @@ Versiones reales, leídas de `package.json`.
 | **React** | `19.2.4` | La librería sobre la que se construyen las pantallas. Viene con Next.js. |
 | **TypeScript** | `^5` | JavaScript con tipos. Evita una clase entera de errores —campos mal escritos, datos con la forma equivocada— antes de que el código llegue a ejecutarse. |
 | **Supabase** (`supabase-js 2.108.1`, `ssr 0.12.0`) | | Base de datos PostgreSQL, autenticación con Google y almacenamiento de archivos, todo en un mismo servicio. Es donde vive la información y donde se aplican las reglas de seguridad. |
-| **Vercel** | plan Hobby | Donde está publicada la web. Cada cambio fusionado a `main` se despliega solo. |
+| **Vercel** | plan **Hobby** | Donde está publicada la web. Cada cambio fusionado a `main` se despliega solo. ⚠️ Este plan **prohíbe el uso comercial** en sus términos de servicio — ver el riesgo abierto en la §8. |
 | **Resend** | `^6.12.4` | Envío de los correos internos del sistema (aprobaciones, avisos). Ningún correo va a clientes. |
 | **@react-pdf/renderer** | `^4.5.1` | Genera los PDF de cotizaciones y órdenes desde el servidor, con el formato de marca de Métrica. |
 | **Tailwind CSS** | `^4` | El sistema de estilos de las pantallas. |
@@ -227,8 +227,16 @@ metricaperu.com
 ```
 
 Cualquier otro correo es rechazado en la vuelta de Google, antes de crear
-sesión. Al primer ingreso válido, la persona elige entre rol Ejecutivo o
-Administración; gerencia lo asigna después desde el módulo de Usuarios.
+sesión.
+
+**Al primer ingreso, la persona elige su propio rol entre Ejecutivo y
+Administración.** Nadie puede autoasignarse Gerencia — ese lo otorga gerencia
+desde el módulo de Usuarios. Una vez registrada, tampoco puede recategorizarse:
+`elegirRol()` comprueba si ya existe y, de existir, no la deja volver a elegir.
+
+> ⚠️ **Esto difiere de lo que se decidió en la Fase 1**, donde el acuerdo fue que
+> el usuario nuevo se creara como Ejecutivo y gerencia ajustara después. Ver el
+> hallazgo abierto en la §10.
 
 Un usuario dado de baja **a mitad de sesión** también queda fuera: su login de
 Google sigue vivo, pero su fila en `usuarios` deja de responder y el sistema lo
@@ -301,15 +309,65 @@ cotización, su código, la ficha, todas las órdenes del proceso y sus códigos
 en una sola operación. Garantiza que no quede un estado intermedio absurdo: una
 ficha anulada con órdenes vigentes colgando, por ejemplo.
 
-Existe también `reactivar_proceso()`, que revierte la cascada. Solo gerencia, o
-quien tenga el permiso explícito `puede_reactivar`.
+#### La reactivación de un proceso anulado
+
+`reactivar_proceso()` revierte la cascada completa: devuelve la cotización, la
+ficha y las órdenes al estado exacto que tenían antes de anularse. Es el único
+camino de vuelta desde `anulada`, que en todo lo demás es un estado final.
+
+**Quién puede usarla.** Cualquiera con rol **gerencia**, o cualquier usuario a
+quien gerencia le haya activado el permiso **`puede_reactivar`** desde el módulo
+de Usuarios. Es una columna real de la tabla `usuarios`, agregada por la
+migración `0017`, con valor `false` por omisión.
+
+> Antes de la `0017` la autorización estaba escrita a mano en la función: rol
+> gerencia **o el correo `erika.pomacaja@metrica.pe`**. Esa migración lo
+> reemplazó por el permiso configurable. Verificado en la función viva: el correo
+> personal ya no aparece.
+
+**Hoy, en producción,** ningún usuario tiene el permiso activado, así que solo
+gerencia puede reactivar.
+
+**Cómo recupera el estado anterior.** No adivina. Al anular, la cascada guarda el
+estado que cada documento tenía en una columna `estado_previo_anulacion`; al
+reactivar, lee esa columna y lo restaura. Si por alguna razón está vacía, cae a
+un valor razonable (`aprobada` para la cotización, `completa` para la ficha).
+
+Solo restaura las órdenes que **esa misma cascada** anuló — las reconoce porque
+son las que tienen `estado_previo_anulacion` guardado. Una orden que ya estaba
+anulada antes, por su cuenta, se queda anulada.
+
+**⚠️ Qué pasa con los códigos: la excepción al candado.** Los códigos vuelven a
+`en_uso`. El trigger `trg_codigo_anulado_es_final`, que normalmente impide que un
+código anulado cambie de estado, tiene una salida deliberada:
+
+```sql
+and coalesce(current_setting('app.reactivando', true), '') <> 'on'
+```
+
+`reactivar_proceso()` enciende esa marca **solo durante su propia transacción**.
+Al terminar, el candado vuelve a estar cerrado para todos.
+
+Es una excepción real y por eso está documentada como tal, igual que la del
+borrado de ODA-PROV en borrador. Pero conviene entender su alcance exacto: el
+código vuelve **al mismo documento que lo tenía**. En ningún momento un código
+queda libre para que otro documento lo tome. Lo que se revierte es la anulación
+completa de un proceso —como si nunca hubiera ocurrido— no el reciclaje de un
+número.
 
 #### Los códigos no se reciclan
 
-Un código tomado no vuelve al banco, y uno anulado nunca se reutiliza. Está
-garantizado por tres vías: no hay código en la aplicación que lo haga, ninguna
-función SQL lo hace, y `banco_codigos` **no tiene política de UPDATE** — un
-intento directo modifica 0 filas.
+**Ningún código se le entrega jamás a un documento distinto.** Un código tomado
+no vuelve al banco para que otro lo use. Está garantizado por tres vías: no hay
+código en la aplicación que lo haga, ninguna función SQL lo hace, y
+`banco_codigos` **no tiene política de UPDATE** — un intento directo modifica 0
+filas.
+
+**La única excepción, y es controlada:** `reactivar_proceso()` devuelve un código
+del estado `anulado` a `en_uso`. Pero se lo devuelve **al mismo documento que
+siempre lo tuvo**, no a uno nuevo. La regla que importa —que dos documentos
+distintos nunca lleven el mismo número— se mantiene intacta. Ver el detalle
+abajo.
 
 #### El candado de no-autoaprobación
 
@@ -402,7 +460,11 @@ No hay formatos propietarios en ninguna capa.
 
 ### Dónde está publicado
 
-**Vercel**, plan Hobby, proyecto `metrica-sistema`, región `gru1`.
+**Vercel**, plan **Hobby**, proyecto `metrica-sistema`, región `gru1`.
+
+> ⚠️ El plan Hobby no permite uso comercial según los términos de servicio de
+> Vercel. El sistema funciona sin problemas técnicos en él, pero hay un riesgo
+> de cumplimiento abierto y una migración pendiente de aprobación. Ver §8.
 
 ### Cómo se despliega un cambio
 
@@ -453,7 +515,9 @@ compartido y termina. Todo el trabajo ocurre en Vercel, porque es desde ahí
 donde se verificó que El Peruano responde.
 
 Se eligió GitHub Actions en vez de Vercel Cron porque el plan Hobby no permite
-dos corridas diarias.
+dos corridas diarias. Al migrar a Pro esa restricción desaparece, pero **no hace
+falta cambiar nada**: GitHub Actions ya funciona y es independiente del plan de
+Vercel.
 
 ### Servicios externos
 
@@ -479,6 +543,46 @@ empresa, eso es un riesgo de continuidad que el otro documento debe resolver.
 Este documento no repite ese detalle a propósito: mezclarlo aquí lo dejaría
 desactualizado en cuanto cambie una titularidad.
 
+### 🔶 Riesgo abierto · El plan de Vercel prohíbe el uso comercial
+
+**Esto no es un problema técnico ni de capacidad.** El sistema funciona
+perfectamente en el plan actual y no se acerca a ninguno de sus límites. Es un
+asunto de **términos de servicio**, y por eso aparece en esta sección y no en la
+de infraestructura.
+
+**La situación.** El sistema opera hoy sobre el plan **Hobby** de Vercel, cuyos
+términos de servicio están reservados para proyectos personales y no comerciales.
+Este es el sistema operativo interno de una empresa, de modo que el uso que se le
+da no corresponde al plan contratado.
+
+**La consecuencia si no se resuelve.** Vercel puede suspender el proyecto, y su
+política no obliga a un aviso previo. Si eso ocurre, **el sistema deja de estar
+accesible para todo el equipo de un momento a otro**. No hay modo degradado ni
+alternativa de acceso: la web simplemente no responde.
+
+Conviene ser preciso sobre el alcance: **no se perderían datos**. La información
+vive en Supabase, que es un servicio distinto y está en un plan de pago
+apropiado. Sería una interrupción de servicio, no una pérdida de información.
+
+**La resolución.** Migrar a **Vercel Pro**, US$ 20 al mes por asiento de
+desarrollador. Un dato que suele confundir y conviene dejar escrito: **los
+usuarios del sistema no cuentan como asientos**. Los asientos son de quien
+desarrolla y administra el proyecto en Vercel, no de quien usa la aplicación
+publicada. Con un asiento basta.
+
+**Estado:** el gasto está en aprobación por administración.
+
+**Por qué no habrá cargos sorpresa.** El consumo real medido a 30 días está entre
+el **0,1 % y el 3 %** de los límites del plan más pequeño. La migración a Pro
+trae la suscripción base y nada más; el sistema no genera tráfico ni cómputo
+cerca de donde empiezan los cobros por uso.
+
+**Alternativa evaluada.** Si el costo fuera un impedimento, **Render** (~US$ 7 al
+mes) permite uso comercial y soporta una aplicación Next.js. Implicaría rehacer
+la configuración de despliegue y las variables de entorno; el código no
+cambiaría. Se deja anotada como camino viable, no como recomendación: Vercel Pro
+es continuidad sin trabajo adicional.
+
 ---
 
 ## 9. Glosario
@@ -503,14 +607,18 @@ desactualizado en cuanto cambie una titularidad.
 | **Bucket** | Carpeta de almacenamiento de archivos en Supabase. Los de este sistema son privados |
 | **Trigger** | Regla de PostgreSQL que se dispara sola al insertar, actualizar o borrar una fila |
 | **SECURITY DEFINER** | Función que corre con los privilegios de su dueño, no de quien la llama. Permite operaciones que el usuario no podría hacer directamente |
+| **`puede_reactivar`** | Permiso por usuario, en la tabla `usuarios`, que gerencia activa para dejar que alguien revierta la anulación de un proceso |
+| **Anulación en cascada** | Anular de una sola vez la cotización, la ficha, sus órdenes y todos sus códigos, en una operación que no puede quedar a medias |
 
 ---
 
 ## 10. Diferencias encontradas vs. lo planeado
 
-Auditoría del 3 de agosto de 2026. Se encontraron **cinco diferencias**, todas
-**resueltas y verificadas**. Se dejan documentadas porque el historial de qué
-falló y cómo se corrigió es parte de la continuidad.
+Auditoría del 3 de agosto de 2026. **Cinco diferencias resueltas y verificadas**,
+más **dos temas abiertos** que requieren decisión. Las resueltas se dejan
+documentadas porque el historial de qué falló y cómo se corrigió es parte de la
+continuidad — quien mantenga esto va a querer saber por qué existen las
+migraciones `0029` a la `0032`.
 
 ### 🔴 1 · Una tabla sin protección — RESUELTO
 
@@ -585,6 +693,41 @@ borrar un borrador funciona y queda archivado con autor y fecha.
 |---|---|
 | **Destinatarios del monitor** | Antes el sistema aceptaba cualquier correo y la garantía era la disciplina. Ahora un `CHECK` en la base impide agregar uno fuera de los dominios de Métrica |
 | **Correo fijo en el código** | `normas-monitor.ts` tenía un correo personal escrito. Ahora el modo prueba manda a quien pulsa el botón, o a los usuarios con rol gerencia si la dispara la tarea programada |
+
+### 🔶 6 · Cualquiera puede autoasignarse rol Administración — ABIERTO
+
+**Qué se encontró.** En la Fase 1 se decidió que un usuario nuevo se creara con
+rol Ejecutivo y que gerencia lo ajustara después. **El código no hace eso:**
+`elegirRol()` en `src/actions/onboarding.ts` acepta `'admin' | 'ejecutivo'` y
+registra a la persona con el rol que ella misma elija en la pantalla
+`/elegir-rol`.
+
+**Por qué importa.** El rol Administración da permiso para **aprobar
+cotizaciones**, emitir órdenes de compra y ver toda la información comercial. Hoy
+cualquier persona con un correo de los dominios permitidos puede tomarlo en su
+primer ingreso, sin que nadie lo autorice.
+
+Conviene medir bien el riesgo, sin exagerarlo ni minimizarlo. El acceso está
+limitado a correos `@metrica.pe` y `@metricaperu.com`, así que no es una puerta
+abierta a un extraño: hace falta ser de la casa. Pero sí significa que **un
+colaborador nuevo obtiene permisos de aprobación sin pasar por ninguna
+autorización**, y eso deja cojo el control de cuatro ojos que se blindó en la
+migración `0030`: ese candado impide aprobar *lo propio*, pero no impide que
+alguien se dé a sí mismo el rol para aprobar *lo de los demás*.
+
+**Recomendación.** Cambiar `elegirRol()` para que registre siempre con rol
+`ejecutivo`, y que Administración la conceda gerencia desde el módulo de
+Usuarios — que ya existe y ya hace exactamente eso. Es un cambio pequeño y
+acotado.
+
+**Estado:** documentado y pendiente de decisión. No se modificó el código porque
+excede lo que se pidió en esta auditoría.
+
+### 🔶 7 · El plan de Vercel no permite uso comercial — ABIERTO
+
+Detallado en la §8. Se lista aquí para que aparezca en el inventario de temas
+pendientes: no es un defecto del sistema sino un riesgo de cumplimiento, con la
+migración a Vercel Pro en aprobación por administración.
 
 ### Deuda menor, sin resolver
 
