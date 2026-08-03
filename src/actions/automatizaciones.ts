@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { obtenerSesion } from '@/lib/auth';
 import { crearClienteServidor } from '@/lib/supabase/server';
 import { correrMonitorNormas } from '@/lib/normas-monitor';
+import { DOMINIOS_PERMITIDOS, dominioPermitido } from '@/config/dominios';
 
 // Acciones de administración de Automatizaciones. Todas son de gerencia.
 //
@@ -66,8 +67,13 @@ export async function correrAhora(): Promise<Resultado> {
   const no = await exigirGerencia();
   if (no) return no;
 
+  // Quién pulsó el botón: en modo prueba el aviso le llega a esa persona, no a
+  // un correo fijo. Sin esto, otra gerencia probando el monitor mandaría el
+  // correo a alguien más sin enterarse.
+  const sesion = await obtenerSesion();
+
   try {
-    const r = await correrMonitorNormas();
+    const r = await correrMonitorNormas(undefined, sesion?.usuario.correo);
     if (!r.corrio) return { ok: true, detalle: r.motivo ?? 'No se ejecutó.' };
     if (r.motivo) return { error: r.motivo };
 
@@ -92,8 +98,9 @@ export async function correrAhora(): Promise<Resultado> {
 
 // ── Destinatarios ───────────────────────────────────────────────────────────
 
-// Misma validación que el constraint de la base: que parezca un correo. No se
-// restringe el dominio porque puede haber que avisarle a alguien de fuera.
+// Que parezca un correo Y que sea de un dominio de Métrica. Lo segundo lo
+// pidió gerencia: estos avisos repasan normativa que afecta a clientes, y no
+// deben poder salir de la empresa ni por descuido.
 const CORREO_VALIDO = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
 export async function agregarDestinatario(
@@ -106,6 +113,14 @@ export async function agregarDestinatario(
 
   const limpio = correo.trim().toLowerCase();
   if (!CORREO_VALIDO.test(limpio)) return { error: 'Ese correo no parece válido.' };
+
+  // Solo dominios de Métrica. La base lo impide igual (constraint
+  // `destinatario_dominio_metrica` de la 0032); esto da el mensaje claro antes
+  // de que el error llegue crudo desde Postgres.
+  if (!dominioPermitido(limpio))
+    return {
+      error: `Solo se puede avisar a correos de Métrica (${DOMINIOS_PERMITIDOS.join(', ')}).`,
+    };
 
   const supabase = await crearClienteServidor();
   const { error } = await supabase.from('normas_legales_destinatarios').insert({
