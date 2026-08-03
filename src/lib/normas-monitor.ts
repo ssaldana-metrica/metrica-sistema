@@ -34,8 +34,33 @@ import {
 
 const CLAVE = 'normas_legales';
 
-/** A quién le llega todo cuando la automatización está en modo prueba. */
-const CORREO_PRUEBA_MONITOR = 'ssaldana@metrica.pe';
+/**
+ * A quién le llega el aviso cuando la automatización está en modo prueba.
+ *
+ * Antes era un correo fijo en el código. Eso significaba que si otra persona de
+ * gerencia encendía el modo prueba, el correo le llegaba a alguien más — un
+ * problema silencioso, porque la pantalla no daba ninguna pista.
+ *
+ * Ahora depende de quién dispara la corrida:
+ *
+ *   · «Correr ahora» desde la pantalla → a quien pulsó el botón.
+ *   · La tarea programada (sin sesión)  → a todos los usuarios activos con rol
+ *     gerencia, que son quienes administran el módulo.
+ */
+async function correosDePrueba(
+  db: ClienteAdmin,
+  correoDeQuienDispara?: string,
+): Promise<string[]> {
+  if (correoDeQuienDispara) return [correoDeQuienDispara];
+
+  const { data } = await db
+    .from('usuarios')
+    .select('correo')
+    .eq('rol', 'gerencia')
+    .eq('activo', true);
+
+  return (data ?? []).map((u) => u.correo as string);
+}
 
 export type ResultadoCorrida = {
   corrio: boolean;
@@ -96,12 +121,12 @@ function tarjetaNorma(n: FilaPendiente): string {
   </div>`;
 }
 
-function armarCorreo(pendientes: FilaPendiente[], esPrueba: boolean) {
+function armarCorreo(pendientes: FilaPendiente[], esPrueba: boolean, destinoPrueba: string[]) {
   const cuentas = [...new Set(pendientes.flatMap((p) => p.etiquetas.map((e) => e.cuenta)))].sort();
 
   const aviso = esPrueba
     ? `<p style="background:#F6ECD2;color:#9A6A12;padding:10px 14px;border-radius:8px;font-family:monospace;font-size:11px;">
-         MODO PRUEBA · este aviso solo se envió a ${escaparHtml(CORREO_PRUEBA_MONITOR)}.
+         MODO PRUEBA · este aviso solo se envió a ${escaparHtml(destinoPrueba.join(', ') || 'gerencia')}.
          Apágalo en Automatizaciones para que llegue a toda la lista.
        </p>`
     : '';
@@ -149,6 +174,9 @@ function fechaIsoLegible(iso: string): string {
 
 export async function correrMonitorNormas(
   fechaPedida?: string,
+  // Correo de quien pulsó «Correr ahora». Vacío cuando la dispara la tarea
+  // programada, que no tiene sesión detrás.
+  correoDeQuienDispara?: string,
 ): Promise<ResultadoCorrida> {
   const db = crearClienteAdmin();
   const fecha = fechaPedida ?? fechaHoyLima();
@@ -245,7 +273,10 @@ export async function correrMonitorNormas(
       };
     }
 
-    const grupos = await armarGrupos(db, esPrueba, pendientes);
+    const destinoPrueba = esPrueba
+      ? await correosDePrueba(db, correoDeQuienDispara)
+      : [];
+    const grupos = await armarGrupos(db, esPrueba, destinoPrueba, pendientes);
     if (grupos.length === 0) {
       await cerrar({
         estado: 'error',
@@ -260,7 +291,7 @@ export async function correrMonitorNormas(
     const fallos: string[] = [];
 
     for (const grupo of grupos) {
-      const { asunto, html } = armarCorreo(grupo.pendientes, esPrueba);
+      const { asunto, html } = armarCorreo(grupo.pendientes, esPrueba, destinoPrueba);
       const envio = await enviarCorreoInterno({ para: grupo.correos, asunto, html });
       if (envio.enviado) detalles.push(envio.detalle);
       else fallos.push(`${grupo.etiqueta}: ${envio.detalle}`);
@@ -428,12 +459,13 @@ type GrupoEnvio = { etiqueta: string; correos: string[]; pendientes: FilaPendien
 async function armarGrupos(
   db: ClienteAdmin,
   esPrueba: boolean,
+  correosPrueba: string[],
   pendientes: FilaPendiente[],
 ): Promise<GrupoEnvio[]> {
   // En modo prueba no se consulta la lista siquiera: así no hay manera de que
   // un correo de prueba se escape a los demás por un descuido.
   if (esPrueba) {
-    return [{ etiqueta: 'prueba', correos: [CORREO_PRUEBA_MONITOR], pendientes }];
+    return [{ etiqueta: 'prueba', correos: correosPrueba, pendientes }];
   }
 
   const { data } = await db

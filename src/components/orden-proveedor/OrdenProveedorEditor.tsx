@@ -449,17 +449,21 @@ export function OrdenProveedorEditor(props: OrdenProveedorEditorProps) {
         </Tarjeta>
 
         <div className="flex flex-wrap items-center justify-end gap-2.5">
-          {/* Borrar y Anular resuelven cosas distintas y por eso conviven:
-              anular deja constancia de una orden que existió y salió; borrar
-              hace desaparecer la que nunca debió crearse. */}
-          <button
-            onClick={borrar}
-            disabled={ocupado}
-            title="Elimina la orden por completo. Úsalo solo si nunca salió al proveedor."
-            className="mr-auto rounded-lg px-3 py-2 text-[13px] font-semibold text-tinta-tenue transition hover:bg-rojo-fondo hover:text-rojo disabled:opacity-60"
-          >
-            Borrar
-          </button>
+          {/* Borrar solo existe mientras la orden es un borrador. Una vez
+              emitida salió al proveedor, y la salida pasa a ser Anular: queda
+              a la vista con su motivo en lugar de desaparecer. No se muestra
+              deshabilitado sino que no se muestra — un botón apagado invita a
+              preguntarse cómo encenderlo. */}
+          {editable && (
+            <button
+              onClick={borrar}
+              disabled={ocupado}
+              title="Elimina el borrador por completo. Solo disponible antes de emitir."
+              className="mr-auto rounded-lg px-3 py-2 text-[13px] font-semibold text-tinta-tenue transition hover:bg-rojo-fondo hover:text-rojo disabled:opacity-60"
+            >
+              Borrar
+            </button>
+          )}
           {props.estado !== 'anulada' && (
             <button
               onClick={anular}

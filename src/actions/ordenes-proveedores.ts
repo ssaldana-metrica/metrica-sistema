@@ -357,6 +357,16 @@ export async function eliminarOrdenProveedor(id: string): Promise<Resultado> {
   const c = await ctx(id);
   if (!c.ok) return { error: c.error };
 
+  // Solo un borrador se borra. Una orden emitida ya salió al proveedor y debe
+  // seguir visible con su estado y su motivo: archivarla no es lo mismo que
+  // conservarla, porque el archivo es de auditoría y nadie lo consulta a
+  // diario. La base lo impide igual (trigger de la 0032); esto da el mensaje.
+  if (c.estado !== 'borrador')
+    return {
+      error:
+        'Solo se puede borrar una orden en borrador. Esta ya fue emitida: usa Anular para dejarla sin efecto conservando el registro.',
+    };
+
   const { data: orden } = await c.supabase
     .from('ordenes_proveedores')
     .select('pdf_url')
