@@ -55,10 +55,14 @@ export async function aprobarCotizacion(id: string): Promise<ResultadoAprobar> {
   if (!cot) return { error: 'No se encontró la cotización.' };
   if (cot.estado !== 'pendiente')
     return { error: `Esta cotización ya fue resuelta (estado: ${cot.estado}).` };
-  // Control interno: un admin no aprueba lo que él mismo cotizó. Gerencia
-  // queda exenta — supervisa todo el sistema y necesita probar el flujo
-  // completo sin restricciones.
-  if (cot.ejecutivo_id === usuario.id && usuario.rol !== 'gerencia')
+  // Control interno de cuatro ojos: nadie aprueba lo que él mismo cotizó, sea
+  // cual sea su rol. Gerencia estuvo exenta hasta la migración 0030; la dueña
+  // del proceso decidió que el control no admite excepciones por rango.
+  //
+  // Esta comprobación da el mensaje claro, pero la barrera real está en la
+  // máquina de estados de la base (trg_cotizacion_transicion): aunque alguien
+  // llamara la API por fuera de la pantalla, el trigger la rechaza.
+  if (cot.ejecutivo_id === usuario.id)
     return {
       error:
         'Control interno: esta cotización la creaste tú, debe aprobarla otro administrador.',
