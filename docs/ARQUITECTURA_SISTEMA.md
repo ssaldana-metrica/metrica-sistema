@@ -13,6 +13,11 @@
 > **Es un documento vivo.** Vive junto al código para que se actualice en el
 > mismo commit que cambia lo que describe. Si algo no coincide con la realidad,
 > el documento está desactualizado — no el código.
+>
+> **Los otros dos documentos del proyecto:** `MANUAL_USUARIO.md` explica cómo se
+> usa el sistema, sin tecnicismos. `INVENTARIO_COMPLETO.md` recoge lo que quedó
+> a medias, la deuda técnica, los datos de prueba y el conocimiento que no cabía
+> en ninguno de los dos.
 
 ---
 
@@ -506,10 +511,21 @@ flowchart LR
     D --> E["✅ En producción<br/>~40 segundos"]
 ```
 
-**La rama de producción es `main`.** Es la única que Vercel despliega y la única
-desde la que GitHub ejecuta las tareas programadas. Apuntarla a otra rama rompe
-las dos cosas a la vez, en silencio — ya ocurrió, y está documentado en
+**La rama de producción es `main`.** Es la única que Vercel despliega. Apuntarla
+a otra rama rompe el despliegue en silencio — ya ocurrió, y está documentado en
 `AGENTS.md`.
+
+> ⚠️ **La rama por defecto del repositorio NO es `main`**, sino
+> `claude/pensive-franklin-dbrg7b` (verificado el 4 de agosto de 2026 contra el
+> API de GitHub). Las tareas programadas de GitHub corren desde la rama por
+> defecto, no desde `main`. Hoy no rompe nada porque el archivo del workflow es
+> idéntico en ambas, pero es una desincronización latente del mismo tipo que la
+> de Vercel. Ver `INVENTARIO_COMPLETO.md`.
+
+> ⚠️ **El repositorio es público.** No contiene credenciales —`.gitignore` cubre
+> `.env*`, no hay archivos de entorno versionados y solo aparecen *nombres* de
+> variables— pero sí el código completo, las migraciones, el RUC de Métrica y
+> los nombres de los clientes.
 
 ### Las migraciones de base de datos
 
@@ -545,9 +561,16 @@ compartido y termina. Todo el trabajo ocurre en Vercel, porque es desde ahí
 donde se verificó que El Peruano responde.
 
 Se eligió GitHub Actions en vez de Vercel Cron porque el plan Hobby no permite
-dos corridas diarias. Al migrar a Pro esa restricción desaparece, pero **no hace
-falta cambiar nada**: GitHub Actions ya funciona y es independiente del plan de
-Vercel.
+dos corridas diarias. Al migrar a Pro esa restricción desaparece, pero no haría
+falta cambiar nada: GitHub Actions es independiente del plan de Vercel.
+
+> 🔴 **La tarea se dispara pero no ejecuta nada.** El intermediario de sesión
+> (`src/proxy.ts`) intercepta todas las rutas salvo `/login`, `/acceso-denegado`
+> y `/auth`. La petición del cron no trae cookie de sesión, así que la desvía a
+> `/login` con un 307 — y `curl --fail-with-body` no considera fallo un 3xx, de
+> modo que el paso sale verde. Diez disparos programados desde el 31 de julio,
+> cero corridas registradas. Diagnóstico completo y corrección en
+> `INVENTARIO_COMPLETO.md`.
 
 ### Servicios externos
 
@@ -644,11 +667,15 @@ es continuidad sin trabajo adicional.
 
 ## 10. Diferencias encontradas vs. lo planeado
 
-Auditoría del 3 de agosto de 2026. **Cinco diferencias resueltas y verificadas**,
-más **dos temas abiertos** que requieren decisión. Las resueltas se dejan
-documentadas porque el historial de qué falló y cómo se corrigió es parte de la
-continuidad — quien mantenga esto va a querer saber por qué existen las
-migraciones `0029` a la `0032`.
+Auditoría del 3 de agosto de 2026, revisada el 4. **Seis diferencias resueltas y
+verificadas**, más **cuatro temas abiertos**. Las resueltas se dejan documentadas
+porque el historial de qué falló y cómo se corrigió es parte de la continuidad —
+quien mantenga esto va a querer saber por qué existen las migraciones `0029` a la
+`0035`.
+
+> El inventario completo de deuda técnica, datos de prueba y piezas
+> desconectadas vive en **`docs/INVENTARIO_COMPLETO.md`**. Esta sección se limita
+> a las diferencias entre lo planeado y lo construido.
 
 ### 🔴 1 · Una tabla sin protección — RESUELTO
 
@@ -766,11 +793,48 @@ simuladas: un ejecutivo con solicitud pendiente no ve ni una cotización y su
 funciona; una gerencia sin el permiso no consigue crear otra gerencia ni
 autoconcederse el permiso, y sí puede seguir cambiando el resto de roles.
 
-### 🔶 7 · El plan de Vercel no permite uso comercial — ABIERTO
+### 🔴 7 · El monitor de normas se dispara pero no corre — ABIERTO
+
+**Qué se encontró (4 de agosto).** La tarea programada de GitHub se ejecutó diez
+veces desde el 31 de julio, siempre con conclusión `success`. En la base, la
+última corrida registrada es del **30 de julio**, y fue manual.
+
+**La causa.** `src/proxy.ts` protege todas las rutas salvo `/login`,
+`/acceso-denegado` y `/auth`. La petición del cron no lleva cookie de sesión, así
+que el intermediario responde un **307 hacia `/login`** antes de que el endpoint
+—que sí tiene su propia autorización por `CRON_SECRET`, bien implementada— llegue
+a ejecutarse. El log de la Action lo muestra literalmente: la respuesta es
+`Redirecting...`. Y `curl --fail-with-body` solo falla con 400 o más, de modo que
+un 307 pasa por bueno.
+
+**Por qué importa.** El aviso de normas legales lleva cinco días sin salir y el
+tablero dice que todo está bien. Un monitor que falla en silencio es peor que no
+tenerlo: se confía en él.
+
+**La corrección.** Agregar `/api/automatizaciones/normas-legales` a
+`RUTAS_PUBLICAS` en `src/proxy.ts`. No debilita nada: la autorización real vive
+en el endpoint. Conviene además que la Action use `--location-trusted` o
+verifique el código HTTP, para que un desvío futuro no vuelva a pasar por éxito.
+
+**Estado:** documentado, sin corregir — la dueña del proceso pidió dejarlo
+anotado en esta ronda.
+
+### 🔶 8 · El plan de Vercel no permite uso comercial — ABIERTO
 
 Detallado en la §8. Se lista aquí para que aparezca en el inventario de temas
 pendientes: no es un defecto del sistema sino un riesgo de cumplimiento, con la
 migración a Vercel Pro en aprobación por administración.
+
+### 🔶 9 · La rama por defecto de GitHub no es `main` — ABIERTO
+
+`claude/pensive-franklin-dbrg7b` es hoy la rama por defecto del repositorio. Las
+tareas programadas corren desde ahí, no desde `main`. Se corrige en Settings →
+General → Default branch. Ver §7.
+
+### 🔶 10 · El repositorio es público — ABIERTO
+
+No hay credenciales dentro, pero sí el código, las migraciones, el RUC de la
+empresa y los nombres de los clientes. Ver §7.
 
 ### Deuda menor, sin resolver
 
