@@ -39,12 +39,19 @@ export default async function LayoutProtegido({
   // ¿Esta persona pidió otro rol y todavía se lo están resolviendo? Se le avisa
   // en todas las pantallas: sin eso ve un menú incompleto y no sabe por qué,
   // y lo natural es pensar que el sistema está roto.
+  //
+  // El `.neq('rol_solicitado', usuario.rol)` es un seguro contra una franja que
+  // miente. Si por lo que sea la solicitud quedó pendiente pero la persona YA
+  // tiene el rol que pidió, decirle que espera —y peor, que mientras tanto es
+  // ejecutiva— es peor que no decirle nada. Pasó el 4 de agosto y se arregló de
+  // raíz en la migración 0036; esto es el cinturón además del tirante.
   const supabaseSolicitud = await crearClienteServidor();
   const { data: solicitudPendiente } = await supabaseSolicitud
     .from('solicitudes_rol')
     .select('rol_solicitado')
     .eq('usuario_id', usuario.id)
     .eq('estado', 'pendiente')
+    .neq('rol_solicitado', usuario.rol)
     .maybeSingle();
 
   // Contador de pendientes para el badge de Aprobaciones

@@ -24,13 +24,46 @@ export async function cambiarRol(
     return { error: 'No puedes cambiar tu propio rol.' };
 
   const supabase = await crearClienteServidor();
+
+  // Se lee ANTES de cambiar: si la persona tenía una solicitud pendiente, el
+  // disparador de la 0036 la va a cerrar en la misma operación y después ya no
+  // habría forma de saber que existía para poder avisarle.
+  const { data: antes } = await supabase
+    .from('usuarios')
+    .select('nombre, correo, solicitudes_rol!solicitudes_rol_usuario_id_fkey(rol_solicitado, estado)')
+    .eq('id', usuarioId)
+    .maybeSingle();
+
   const { error } = await supabase
     .from('usuarios')
-    .update({ rol })
+    .update({
+      rol,
+      rol_otorgado_por: sesion.usuario.id,
+      rol_otorgado_en: new Date().toISOString(),
+    })
     .eq('id', usuarioId);
   if (error) return { error: 'No se pudo cambiar el rol.' };
 
+  // Cambiar el rol desde la tabla resuelve la solicitud pendiente, si la había.
+  // Entonces tiene que avisar igual que el botón Aprobar: para quien espera, las
+  // dos cosas son el mismo hecho, y enterarse o no de su propio rol no puede
+  // depender de por dónde entró gerencia.
+  const pendiente = ((antes?.solicitudes_rol ?? []) as {
+    rol_solicitado: string;
+    estado: string;
+  }[]).find((s) => s.estado === 'pendiente');
+
+  if (pendiente && antes) {
+    await avisarResolucionDeRol({
+      correo: antes.correo as string,
+      nombre: antes.nombre as string,
+      rolSolicitado: pendiente.rol_solicitado,
+      aprobada: pendiente.rol_solicitado === rol,
+    });
+  }
+
   revalidatePath('/usuarios');
+  revalidatePath('/', 'layout'); // la franja de aviso vive en el layout
   return { ok: true };
 }
 
@@ -108,12 +141,20 @@ async function resolverSolicitud(
 
   const supabase = await crearClienteServidor();
 
-  const { data: solicitud } = await supabase
+  // El `!solicitudes_rol_usuario_id_fkey` no es adorno: esta tabla apunta DOS
+  // veces a `usuarios` —quién pide y quién resuelve— y sin decir cuál de las dos
+  // se quiere, la consulta falla entera. Falla además en silencio, porque
+  // devuelve el error en `error` y no en `data`. Así estuvo rota la pantalla de
+  // solicitudes desde que se escribió.
+  const { data: solicitud, error: errBuscar } = await supabase
     .from('solicitudes_rol')
-    .select('id, usuario_id, rol_solicitado, estado, usuarios(nombre, correo)')
+    .select(
+      'id, usuario_id, rol_solicitado, estado, persona:usuarios!solicitudes_rol_usuario_id_fkey(nombre, correo)',
+    )
     .eq('id', solicitudId)
     .maybeSingle();
 
+  if (errBuscar) return { error: `No se pudo leer la solicitud: ${errBuscar.message}` };
   if (!solicitud) return { error: 'No se encontró la solicitud.' };
   if (solicitud.estado !== 'pendiente')
     return { error: 'Esa solicitud ya fue resuelta.' };
@@ -146,7 +187,7 @@ async function resolverSolicitud(
   if (error) return { error: 'No se pudo registrar la decisión.' };
 
   const persona = uno(
-    solicitud.usuarios as { nombre: string; correo: string }[] | null,
+    solicitud.persona as { nombre: string; correo: string }[] | null,
   );
   if (persona) {
     // El correo no bloquea: la decisión ya está tomada y registrada.
@@ -159,6 +200,7 @@ async function resolverSolicitud(
   }
 
   revalidatePath('/usuarios');
+  revalidatePath('/', 'layout'); // la franja de aviso vive en el layout
   return { ok: true };
 }
 
