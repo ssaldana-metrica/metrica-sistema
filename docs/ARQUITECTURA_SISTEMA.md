@@ -14,10 +14,10 @@
 > mismo commit que cambia lo que describe. Si algo no coincide con la realidad,
 > el documento está desactualizado — no el código.
 >
-> **Los otros dos documentos del proyecto:** `MANUAL_USUARIO.md` explica cómo se
+> **Los otros tres documentos del paquete:** `MANUAL_USUARIO.md` explica cómo se
 > usa el sistema, sin tecnicismos. `INVENTARIO_COMPLETO.md` recoge lo que quedó
-> a medias, la deuda técnica, los datos de prueba y el conocimiento que no cabía
-> en ninguno de los dos.
+> a medias, la deuda técnica y los datos de prueba. `PLAN_CONTINUIDAD.md`
+> responde qué hace Métrica con este sistema si quien lo construyó no está.
 
 ---
 
@@ -587,7 +587,7 @@ falta cambiar nada: GitHub Actions es independiente del plan de Vercel.
 ## 8. Propiedad y continuidad
 
 El detalle de qué cuentas existen, a nombre de quién están y cómo se transfiere
-el acceso vive en un documento aparte, el **Plan de Continuidad**. Aquí solo se
+el acceso vive en un documento aparte, **`PLAN_CONTINUIDAD.md`**. Aquí solo se
 deja constancia de que existe y de la distinción que importa: las cuentas de
 **Supabase, Vercel, GitHub y Resend** son las que sostienen el sistema, y si
 alguna está a nombre personal de un colaborador en lugar de a nombre de la

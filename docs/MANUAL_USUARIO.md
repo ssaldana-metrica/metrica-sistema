@@ -6,8 +6,8 @@
 > Busca tu rol en el índice y ve directo ahí. No hace falta leerlo entero.
 >
 > Si lo que buscas es cómo está construido, eso está en
-> `ARQUITECTURA_SISTEMA.md`, e `INVENTARIO_COMPLETO.md` reúne lo pendiente.
-> Ninguno de los dos hace falta para trabajar.
+> `ARQUITECTURA_SISTEMA.md`; `INVENTARIO_COMPLETO.md` reúne lo pendiente y
+> `PLAN_CONTINUIDAD.md` es para gerencia. Ninguno hace falta para trabajar.
 
 ---
 
