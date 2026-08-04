@@ -95,18 +95,20 @@ tarjetas, y **dos de ellas no llevan a ninguna parte**:
 |---|---|---|
 | **Sistema de Cotizaciones** | *Disponible* | Enlace real a `/panel`. Es el sistema completo |
 | **Automatizaciones** | *Nuevo* | Enlace real a `/automatizaciones` |
-| **Recursos Humanos** | *Próximamente* · nota *"En camino"* | **Nada.** Un recuadro de borde punteado, sin enlace |
+| **Desarrollo Organizacional** | *Próximamente* · nota *"En camino"* | **Nada.** Un recuadro de borde punteado, sin enlace |
 | **Nuevos sistemas** | *En construcción* · nota *"Reservado"* | **Nada.** Igual que el anterior |
 
 Para que quede sin ambigüedad, porque la pregunta se hizo explícitamente:
-**"Recursos Humanos" y "Nuevos sistemas" son marcadores visuales y nada más.**
-No hay ruta, ni tabla, ni código, ni siquiera un borrador. Son un `<div>` con
-texto. La descripción que se lee en pantalla —*"Gestión del equipo y los procesos
-internos de Métrica"*— es una intención, no una descripción de algo que exista.
+**"Desarrollo Organizacional" y "Nuevos sistemas" son marcadores visuales y nada
+más.** No hay ruta, ni tabla, ni código, ni siquiera un borrador. Son un `<div>`
+con texto. La descripción que se lee en pantalla —*"Gestión del equipo y los
+procesos internos de Métrica"*— es una intención, no una descripción de algo que
+exista.
 
-Se hicieron así a propósito: comunican que el ecosistema va a crecer sin
-prometer una fecha. Pero si alguien pregunta "¿cuándo entra RRHH?", la respuesta
-honesta es que **no se ha empezado**.
+Se hicieron así a propósito: comunican que el ecosistema va a crecer sin prometer
+una fecha. Pero si alguien pregunta cuándo entra Desarrollo Organizacional, la
+respuesta honesta es que **no se ha empezado**. (Esa tarjeta se llamó *Recursos
+Humanos* hasta el 4 de agosto de 2026.)
 
 ### 2.3 · El módulo de Automatizaciones, completo · INFORMATIVO
 

@@ -114,7 +114,7 @@ export default async function Inicio() {
         />
         <TarjetaProximamente
           etiqueta="Próximamente"
-          titulo="Recursos Humanos"
+          titulo="Desarrollo Organizacional"
           descripcion="Gestión del equipo y los procesos internos de Métrica."
           nota="En camino"
           icono={

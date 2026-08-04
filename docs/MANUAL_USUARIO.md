@@ -82,7 +82,8 @@ deja elegir. Hoy hay dos disponibles:
 - **Automatizaciones** — las tareas que corren solas. Solo gerencia administra
   aquí, pero todos pueden mirar.
 
-Los otros dos (*Recursos Humanos* y *Nuevos sistemas*) todavía no existen.
+Los otros dos (*Desarrollo Organizacional* y *Nuevos sistemas*) todavía no
+existen.
 
 [CAPTURA: selector de sistemas con las cuatro tarjetas]
 
