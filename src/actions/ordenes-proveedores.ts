@@ -385,3 +385,52 @@ export async function eliminarOrdenProveedor(id: string): Promise<Resultado> {
   revalidatePath('/ordenes/proveedores');
   return { ok: true };
 }
+
+// ── La factura del proveedor ────────────────────────────────────────────────
+//
+// Solo se registra cuando la orden ya está EMITIDA: una factura llega después
+// de que la orden salió al proveedor, así que en borrador no hay nada que
+// facturar. Si la orden se anula después, el dato se conserva y se sigue
+// viendo, pero ya no se edita — esconderlo taparía que hubo un comprobante de
+// por medio, que es lo que más interesa al revisar una anulación.
+export async function guardarFacturaProveedor(
+  id: string,
+  numero: string,
+  recibidaEn: string | null,
+): Promise<Resultado> {
+  const c = await ctx(id);
+  if (!c.ok) return { error: c.error };
+
+  if (c.estado !== 'emitida')
+    return {
+      error:
+        c.estado === 'borrador'
+          ? 'La factura se registra cuando la orden ya está emitida.'
+          : 'Esta orden está anulada: su factura ya no se puede modificar.',
+    };
+
+  const limpio = numero.trim();
+  if (recibidaEn && !/^\d{4}-\d{2}-\d{2}$/.test(recibidaEn))
+    return { error: 'La fecha de recepción no es válida.' };
+  // Una fecha sin número de factura describe algo que no existe.
+  if (recibidaEn && !limpio)
+    return { error: 'Escribe el número de la factura antes de la fecha.' };
+
+  const { error } = await c.supabase
+    .from('ordenes_proveedores')
+    .update({
+      factura_numero: limpio,
+      factura_recibida_en: recibidaEn,
+      // Quién cargó la factura es una pregunta distinta de quién tocó la orden
+      // por última vez, así que se guarda aparte de `updated_at`.
+      factura_actualizada_por: c.usuarioId,
+      factura_actualizada_en: new Date().toISOString(),
+    })
+    .eq('id', id)
+    .eq('estado', 'emitida'); // candado por si cambió de estado mientras tanto
+  if (error) return { error: 'No se pudo guardar la factura.' };
+
+  revalidatePath('/ordenes/proveedores');
+  revalidatePath(`/ordenes/proveedores/${id}`);
+  return { ok: true };
+}

@@ -32,10 +32,29 @@ personal no entra, aunque sea tuyo.
 **Ejecutivo** y **Administración**. Elige la que te corresponde y pulsa **Entrar
 al sistema**.
 
-> ⚠️ Esto se elige **una sola vez** y después no lo puedes cambiar tú. Si te
-> equivocas, pídele a gerencia que lo corrija desde el módulo de Usuarios.
-
 [CAPTURA: pantalla "¿Cuál es tu rol?" con las dos opciones]
+
+Lo que pasa después depende de lo que elegiste:
+
+- **Ejecutivo** → entras de una vez, con todo lo de tu rol disponible.
+- **Administración** → entras igual, pero **como Ejecutivo mientras gerencia
+  revisa tu pedido**. Desde el primer minuto puedes cotizar y llenar tus fichas;
+  lo único que todavía no puedes hacer es aprobar cotizaciones.
+
+Mientras esperas vas a ver **una franja amarilla arriba de todas las pantallas**
+que te recuerda que tu solicitud está pendiente. No es un error ni algo que
+tengas que arreglar: es para que sepas por qué te falta una sección del menú.
+
+[CAPTURA: franja amarilla de "Tu solicitud del rol Administración está pendiente de aprobación"]
+
+Cuando gerencia decida, **te llega un correo** y la franja desaparece sola. Si
+te la aprobaron, recarga la página y ya ves las secciones nuevas.
+
+> **Nadie se concede a sí mismo el permiso de aprobar.** Es a propósito: quien
+> aprueba un gasto no puede ser también quien decidió que podía aprobarlo.
+
+Si te equivocaste de opción, avísale a gerencia: lo corrige desde el módulo de
+Usuarios en un clic.
 
 ### Si te dice que no puedes entrar
 
@@ -353,8 +372,8 @@ Tienes dos botones distintos y **no hacen lo mismo**:
 
 | Botón | Qué hace | Cuándo usarlo |
 |---|---|---|
-| **Reabrir para administración** | Reabre la ficha **sin avisar al ejecutivo** | Te equivocaste tú en el seguimiento |
-| **Reabrir y avisar** | Reabre y **le manda un correo al ejecutivo** | Necesitas que él corrija su parte |
+| **Corregir seguimiento (sin avisar)** | Reabre la ficha **sin avisar al ejecutivo** | Te equivocaste tú en el seguimiento |
+| **Devolver la ficha al ejecutivo** | Reabre y **le manda un correo al ejecutivo** | Necesitas que él corrija su parte |
 
 Si usas el segundo, escribe qué debe corregir. Ejemplo del propio sistema:
 *"Corrige el RUC del proveedor 2 y vuelve a marcar tu parte como lista."*
@@ -481,6 +500,36 @@ pero no emitirla.
 
 [CAPTURA: editor de ODA-PROV con el aviso amarillo del monto mínimo]
 
+### Registrar la factura del proveedor
+
+Cuando el proveedor manda su factura, se anota en la propia lista de órdenes,
+sin entrar a cada una. En la columna **Factura del proveedor** vas a ver:
+
+- **+ Registrar** si todavía no tiene nada anotado.
+- El número y la fecha si ya se cargó, así: `F001-00123` y debajo *recibida
+  03-ago*.
+
+Pulsa ahí, escribe el **número de la factura** y la **fecha en que la
+recibiste**, y dale a **Guardar**. Si te equivocaste, pulsa de nuevo y corrígelo.
+
+[CAPTURA: columna "Factura del proveedor" abierta para editar, con los dos campos y los botones Guardar y Cancelar]
+
+Tres cosas que conviene saber:
+
+- **Solo se puede en órdenes emitidas.** En un borrador no hay nada que
+  facturar todavía, así que la columna aparece con un guion.
+- **La fecha sin número no se guarda.** Primero el número; la fecha sola
+  describiría una factura que no existe.
+- **Si la orden se anula después, la factura se conserva** y se sigue viendo.
+  Esconderla taparía justo lo que más interesa al revisar una anulación.
+
+El sistema guarda por dentro quién cargó cada factura y cuándo, aunque eso no se
+muestre en la tabla.
+
+**Para saber qué falta:** filtra por **Emitidas** y mira qué filas siguen con
+*+ Registrar*. Esas son las órdenes que salieron y todavía no tienen su
+comprobante.
+
 ### Buscar y filtrar
 
 Arriba tienes filtros por estado (**Todas**, **Borrador**, **Emitidas**,
@@ -561,12 +610,52 @@ Además tienes tres cosas que nadie más:
 Entra a **Usuarios**. Ves a todo el que tiene acceso, con su rol y si está
 activo.
 
+### Aprobar una solicitud de rol
+
+Cuando alguien nuevo entra y elige **Administración**, no se lo lleva solo: entra
+como Ejecutivo y su pedido queda esperándote. **Te llega un correo** en el
+momento, y en la pantalla de Usuarios aparece **un bloque amarillo arriba de la
+tabla** con las solicitudes pendientes.
+
+[CAPTURA: bloque amarillo de solicitudes pendientes, con el nombre, el correo, el rol pedido y los botones Aprobar y Rechazar]
+
+De cada solicitud ves quién la pide, con qué correo, qué rol pide y desde
+cuándo. Dos botones:
+
+- **Aprobar** — le concede el rol al instante. Le llega un correo avisándole.
+- **Rechazar** — la persona sigue como Ejecutivo, que es un rol de trabajo
+  completo. También le llega un correo, redactado sin dramatismo.
+
+El bloque **solo aparece si hay algo pendiente**. Si no ves nada, es que no hay
+nada que resolver.
+
+> **No puedes resolver tu propia solicitud.** Si por lo que sea aparece una a tu
+> nombre, en vez de los botones vas a leer *"Es tu solicitud · la resuelve otra
+> persona"*. Lo mismo vale si intentaras hacerlo por fuera de la pantalla: la
+> base de datos lo rechaza.
+
+Aprobada o rechazada, **la decisión queda registrada** con tu nombre y la fecha.
+Si dentro de un año se vuelve a pedir lo mismo, las dos decisiones constan.
+
 ### Cambiar el rol de alguien
 
 Elige el rol nuevo en su fila. Es inmediato.
 
 **No puedes cambiar tu propio rol** — para que nadie se deje a sí mismo sin
 acceso por error.
+
+### Nombrar a otra gerencia
+
+El rol de **Gerencia** no aparece en la lista de roles de la tabla salvo que
+tengas el permiso para concederlo. Es un permiso aparte del rol: toda gerencia
+resuelve solicitudes de Administración, pero **solo quien tiene el permiso puede
+crear más gerencias** — o quitarle el rol a una que ya existe.
+
+Ese mismo permiso se transfiere desde esta pantalla, y solo lo puede pasar quien
+ya lo tiene. Si mañana la persona que lo tiene deja la empresa, tiene que
+pasárselo a alguien **antes de irse**: no hay forma de concedérselo uno mismo.
+
+[CAPTURA: fila de un usuario en la tabla, con el selector de rol desplegado y la casilla del permiso de otorgar gerencia]
 
 ### Dar de baja a alguien que sale de la empresa
 
@@ -691,6 +780,12 @@ Tu rol no la incluye. Los ejecutivos no ven Aprobaciones, Órdenes ni Tabla de
 control; solo gerencia ve Usuarios. Si crees que te falta acceso, pídeselo a
 gerencia.
 
+**Elegí Administración al entrar, pero no veo Aprobaciones.**
+Mira si arriba tienes una franja amarilla: tu solicitud está esperando a
+gerencia. Mientras tanto trabajas como Ejecutivo, que es un rol completo —
+puedes cotizar y llenar tus fichas con normalidad. Cuando la resuelvan te llega
+un correo; recarga la página y aparecen las secciones nuevas.
+
 **Se me fue un dato mal en una cotización que ya está aprobada.**
 No la puedes editar tú. Pídele a administración que la devuelva; la corriges y
 la reenvías con el mismo código.
@@ -771,13 +866,7 @@ Mismo nombre, distinto significado según el módulo.
 Alguien que trabaje en los dos va a dudar. Podría llamarse *Rubro del gasto* en
 el módulo de proveedores.
 
-### 2 · Dos botones llamados "Reabrir" que hacen cosas distintas
-
-En la ficha conviven **Reabrir para administración** (no avisa al ejecutivo) y
-**Reabrir y avisar** (sí le manda correo). Los nombres lo dicen, pero están uno
-al lado del otro y la diferencia es fácil de pasar por alto con prisa.
-
-### 3 · El botón "Borrar" desaparece sin explicar por qué
+### 2 · El botón "Borrar" desaparece sin explicar por qué
 
 En una ODA a proveedores emitida, el botón **Borrar** simplemente ya no está.
 Es la decisión correcta, pero alguien que lo usó ayer en un borrador va a
@@ -786,30 +875,37 @@ buscarlo y no lo va a encontrar, sin saber si es un error suyo.
 Un texto breve —*"Las órdenes emitidas se anulan, no se borran"*— ahorraría la
 consulta.
 
-### 4 · El selector de sistemas sorprende al entrar
+### 3 · El selector de sistemas sorprende al entrar
 
 Después del login no caes en el sistema sino en una pantalla que te deja elegir.
 Tiene sentido a futuro, pero hoy que solo hay uno operativo es un clic extra que
 la gente no espera.
 
-### 5 · Los mensajes de error aparecen arriba en formularios largos
+### 4 · Los mensajes de error aparecen arriba en formularios largos
 
 En la ficha y en las órdenes, si falta un dato el aviso sale al principio del
 formulario. Si estabas abajo, en el botón de emitir, puedes no verlo y pensar
 que no pasó nada.
 
-### 6 · Los estados se llaman distinto según dónde los mires
+### 5 · Los estados se llaman distinto según dónde los mires
 
 El ejecutivo pulsa **Mi parte está lista**; la ficha pasa a un estado que la
 tabla de control muestra con otras palabras. Es el mismo momento del proceso
 nombrado de dos maneras, y complica ponerse de acuerdo al hablar por teléfono.
 
-### 7 · Cualquiera elige su rol al entrar por primera vez
+---
 
-Un colaborador nuevo puede elegir **Administración** por su cuenta, lo que le da
-permiso para aprobar cotizaciones sin que nadie lo autorice. Está limitado a
-correos de Métrica, así que no entra un extraño — pero convendría que gerencia
-sea quien conceda ese rol.
+### Dos observaciones que ya se resolvieron
 
-*(Este punto ya está anotado también en la Ficha Técnica de Arquitectura, con la
-recomendación técnica correspondiente.)*
+Estaban en la primera versión de este manual y se corrigieron en el mismo
+trabajo. Se dejan anotadas para que quede el registro de qué cambió.
+
+**Cualquiera elegía su rol al entrar por primera vez.** Un colaborador nuevo
+podía darse **Administración** por su cuenta y aprobar cotizaciones sin que
+nadie lo autorizara. Ahora quien elige Administración entra como Ejecutivo y
+gerencia resuelve la solicitud (ver *Cómo entrar* y *3.1 · Gestionar usuarios*).
+
+**Dos botones llamados "Reabrir" hacían cosas distintas.** En la ficha convivían
+*Reabrir para administración* y *Reabrir y avisar*, uno al lado del otro. Ahora
+se llaman **Corregir seguimiento (sin avisar)** y **Devolver la ficha al
+ejecutivo**: el nombre dice qué hace cada uno sin tener que recordarlo.

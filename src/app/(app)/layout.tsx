@@ -36,6 +36,17 @@ export default async function LayoutProtegido({
   const { usuario } = sesion;
   const esAdmin = usuario.rol === 'admin' || usuario.rol === 'gerencia';
 
+  // ¿Esta persona pidió otro rol y todavía se lo están resolviendo? Se le avisa
+  // en todas las pantallas: sin eso ve un menú incompleto y no sabe por qué,
+  // y lo natural es pensar que el sistema está roto.
+  const supabaseSolicitud = await crearClienteServidor();
+  const { data: solicitudPendiente } = await supabaseSolicitud
+    .from('solicitudes_rol')
+    .select('rol_solicitado')
+    .eq('usuario_id', usuario.id)
+    .eq('estado', 'pendiente')
+    .maybeSingle();
+
   // Contador de pendientes para el badge de Aprobaciones
   let pendientes = 0;
   if (esAdmin) {
@@ -100,6 +111,20 @@ export default async function LayoutProtegido({
     <ToastProvider>
       <SinScrollNumerico />
       <Shell
+        aviso={
+          solicitudPendiente ? (
+            <div className="border-b border-ambar/30 bg-ambar-fondo px-6 py-2.5 text-[12.5px] text-ambar">
+              Tu solicitud del rol{' '}
+              <strong>
+                {solicitudPendiente.rol_solicitado === 'admin'
+                  ? 'Administración'
+                  : String(solicitudPendiente.rol_solicitado)}
+              </strong>{' '}
+              está pendiente de aprobación. Mientras tanto puedes trabajar como
+              Ejecutivo: cotizar y llenar tus fichas.
+            </div>
+          ) : null
+        }
         grupos={grupos}
         encabezado={
           <>
