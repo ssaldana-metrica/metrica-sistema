@@ -13,7 +13,7 @@ export default async function PaginaUsuarios() {
 
   const supabase = await crearClienteServidor();
 
-  const [{ data }, { data: pendientes }] = await Promise.all([
+  const [{ data }, { data: pendientes, error: errPendientes }] = await Promise.all([
     supabase
       .from('usuarios')
       .select(
@@ -23,7 +23,13 @@ export default async function PaginaUsuarios() {
       .order('nombre'),
     supabase
       .from('solicitudes_rol')
-      .select('id, usuario_id, rol_solicitado, creada_en, usuarios(nombre, correo)')
+      // Hay que decir POR CUÁL de las dos claves foráneas se une: esta tabla
+      // apunta a `usuarios` dos veces, en `usuario_id` y en `resuelta_por`.
+      // Sin el nombre de la clave la consulta no es ambigua para nosotros pero
+      // sí para PostgREST, que la rechaza entera.
+      .select(
+        'id, usuario_id, rol_solicitado, creada_en, persona:usuarios!solicitudes_rol_usuario_id_fkey(nombre, correo)',
+      )
       .eq('estado', 'pendiente')
       .order('creada_en'),
   ]);
@@ -39,7 +45,7 @@ export default async function PaginaUsuarios() {
   }));
 
   const solicitudes: SolicitudPendiente[] = (pendientes ?? []).map((s) => {
-    const persona = s.usuarios as unknown as {
+    const persona = s.persona as unknown as {
       nombre: string;
       correo: string;
     } | null;
@@ -70,6 +76,18 @@ export default async function PaginaUsuarios() {
           cualquier colaborador. Solo gerencia ve esta sección.
         </p>
       </div>
+
+      {/* Si la consulta de solicitudes falla, hay que DECIRLO. La versión
+          anterior devolvía una lista vacía ante un error y la pantalla se veía
+          idéntica a "no hay nada pendiente": una persona esperó su aprobación
+          sin que nadie pudiera dársela, porque nadie sabía que existía. */}
+      {errPendientes && (
+        <div className="mb-6 rounded-xl border border-rojo/30 bg-rojo-fondo px-5 py-4 text-[13px] text-rojo">
+          <strong>No se pudieron cargar las solicitudes de rol.</strong> Si
+          alguien está esperando aprobación, no aparece en esta pantalla. Avisa a
+          soporte con este detalle: <span className="font-mono text-[12px]">{errPendientes.message}</span>
+        </div>
+      )}
 
       <SolicitudesPendientes solicitudes={solicitudes} yoId={sesion.usuario.id} />
 

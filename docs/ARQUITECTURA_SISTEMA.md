@@ -7,17 +7,17 @@
 > | | |
 > |---|---|
 > | Última verificación | 4 de agosto de 2026 |
-> | Rama documentada | `main` · commit `429516c` |
-> | Migraciones aplicadas | 35 (coinciden con los archivos del repositorio) |
+> | Rama documentada | `main` · commit `7586916` |
+> | Migraciones aplicadas | 36 (coinciden con los archivos del repositorio) |
 >
 > **Es un documento vivo.** Vive junto al código para que se actualice en el
 > mismo commit que cambia lo que describe. Si algo no coincide con la realidad,
 > el documento está desactualizado — no el código.
 >
-> **Los otros dos documentos del proyecto:** `MANUAL_USUARIO.md` explica cómo se
+> **Los otros tres documentos del paquete:** `MANUAL_USUARIO.md` explica cómo se
 > usa el sistema, sin tecnicismos. `INVENTARIO_COMPLETO.md` recoge lo que quedó
-> a medias, la deuda técnica, los datos de prueba y el conocimiento que no cabía
-> en ninguno de los dos.
+> a medias, la deuda técnica y los datos de prueba. `PLAN_CONTINUIDAD.md`
+> responde qué hace Métrica con este sistema si quien lo construyó no está.
 
 ---
 
@@ -587,7 +587,7 @@ falta cambiar nada: GitHub Actions es independiente del plan de Vercel.
 ## 8. Propiedad y continuidad
 
 El detalle de qué cuentas existen, a nombre de quién están y cómo se transfiere
-el acceso vive en un documento aparte, el **Plan de Continuidad**. Aquí solo se
+el acceso vive en un documento aparte, **`PLAN_CONTINUIDAD.md`**. Aquí solo se
 deja constancia de que existe y de la distinción que importa: las cuentas de
 **Supabase, Vercel, GitHub y Resend** son las que sostienen el sistema, y si
 alguna está a nombre personal de un colaborador en lugar de a nombre de la
@@ -667,11 +667,11 @@ es continuidad sin trabajo adicional.
 
 ## 10. Diferencias encontradas vs. lo planeado
 
-Auditoría del 3 de agosto de 2026, revisada el 4. **Seis diferencias resueltas y
+Auditoría del 3 de agosto de 2026, revisada el 4. **Siete diferencias resueltas y
 verificadas**, más **cuatro temas abiertos**. Las resueltas se dejan documentadas
 porque el historial de qué falló y cómo se corrigió es parte de la continuidad —
 quien mantenga esto va a querer saber por qué existen las migraciones `0029` a la
-`0035`.
+`0036`.
 
 > El inventario completo de deuda técnica, datos de prueba y piezas
 > desconectadas vive en **`docs/INVENTARIO_COMPLETO.md`**. Esta sección se limita
@@ -818,6 +818,47 @@ verifique el código HTTP, para que un desvío futuro no vuelva a pasar por éxi
 
 **Estado:** documentado, sin corregir — la dueña del proceso pidió dejarlo
 anotado en esta ronda.
+
+### 🔴 11 · La pantalla de solicitudes nunca llegó a mostrarse — RESUELTO
+
+**Qué se encontró (4 de agosto, reportado por gerencia).** La primera persona que
+usó el flujo nuevo pidió Administración y su solicitud quedó pendiente. En la
+pantalla de Usuarios **no aparecía por ningún lado**, así que no había forma de
+aprobarla.
+
+**La causa.** `solicitudes_rol` apunta **dos veces** a `usuarios` —`usuario_id` y
+`resuelta_por`—. Las dos consultas nuevas pedían `usuarios(nombre, correo)` sin
+decir por cuál de las dos claves unir, y PostgREST rechaza la consulta entera.
+Como ninguno de los dos sitios comprobaba `error`, el resultado era una lista
+vacía indistinguible de "no hay nada pendiente". El botón Aprobar tampoco habría
+funcionado: la misma ambigüedad estaba en `resolverSolicitud()`.
+
+Las otras doce consultas del sistema que embeben `usuarios` **sí** desambiguan
+(`usuarios!cotizaciones_ejecutivo_id_fkey`). Estas dos fueron las únicas que no.
+
+**El daño colateral.** Al no poder aprobar, gerencia cambió el rol a mano desde
+el selector de la tabla. El rol cambió pero la solicitud siguió `pendiente`, y
+como la franja de aviso mira la solicitud y no el rol, la persona —ya
+administradora— seguía leyendo *«tu solicitud está pendiente, mientras tanto
+trabajas como Ejecutivo»* en todas las pantallas.
+
+**Cómo se cerró.**
+
+- Las dos consultas nombran la clave foránea, y ahora **comprueban `error`**: si
+  falla, la pantalla lo dice en rojo en vez de fingir que no hay solicitudes.
+- **Migración `0036`** · un disparador cierra la solicitud pendiente en la misma
+  operación en que cambia el rol —`aprobada` si coincide con lo pedido,
+  `rechazada` si no—, con autor y fecha. El rol y la solicitud ya no pueden
+  divergir.
+- `cambiarRol()` manda el mismo correo que el botón Aprobar: para quien espera,
+  las dos cosas son el mismo hecho.
+- La franja de aviso no se dibuja si la persona ya tiene el rol que pidió.
+
+**La lección, porque es la parte útil.** Esta función se dio por verificada con
+pruebas de comportamiento sobre la base, con sesiones simuladas. Eran correctas y
+no sirvieron: **el fallo estaba en la capa que traduce la consulta, no en las
+reglas de la base.** Una barrera bien puesta no dice nada sobre si la pantalla
+llega a consultarla.
 
 ### 🔶 8 · El plan de Vercel no permite uso comercial — ABIERTO
 

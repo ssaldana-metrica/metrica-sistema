@@ -562,7 +562,7 @@ vez y antes de que el equipo empiece**, no como costumbre.
 
 ## 7. Configuración y servicios externos
 
-Material para el Plan de Continuidad. **Nombres de variables únicamente, ningún
+Material para `PLAN_CONTINUIDAD.md`. **Nombres de variables únicamente, ningún
 valor.**
 
 ### 7.1 · Servicios conectados · ACCIÓN REQUERIDA
