@@ -4,6 +4,10 @@
 > algo no sale como esperabas. No explica cómo funciona el sistema por dentro.
 >
 > Busca tu rol en el índice y ve directo ahí. No hace falta leerlo entero.
+>
+> Si lo que buscas es cómo está construido, eso está en
+> `ARQUITECTURA_SISTEMA.md`, e `INVENTARIO_COMPLETO.md` reúne lo pendiente.
+> Ninguno de los dos hace falta para trabajar.
 
 ---
 
@@ -19,7 +23,7 @@ de cálculo sueltas y los correos de "¿en qué quedó esto?".
 
 ### Cómo entrar
 
-1. Abre `[PENDIENTE: dirección definitiva]` en tu navegador.
+1. Abre **https://metrica-sistema.vercel.app** en tu navegador.
 2. Pulsa **Entrar con Google**.
 3. Elige tu correo de Métrica.
 
@@ -553,6 +557,11 @@ que una orden que ya salió no se hace desaparecer, se anula dejando constancia.
 
 En los dos casos, **el número no se reutiliza**.
 
+Hay un tercer botón que solo sale en las emitidas: **Reabrir**. Devuelve la orden
+a borrador para corregirla y volver a emitirla, con el mismo número. Mientras
+esté en borrador no se puede tocar su factura — vuelve a poderse al emitirla de
+nuevo.
+
 ## 2.12 · La tabla de control
 
 Es la vista de seguimiento de todos los procesos, uno por línea. Reúne en una
@@ -651,11 +660,20 @@ tengas el permiso para concederlo. Es un permiso aparte del rol: toda gerencia
 resuelve solicitudes de Administración, pero **solo quien tiene el permiso puede
 crear más gerencias** — o quitarle el rol a una que ya existe.
 
-Ese mismo permiso se transfiere desde esta pantalla, y solo lo puede pasar quien
-ya lo tiene. Si mañana la persona que lo tiene deja la empresa, tiene que
-pasárselo a alguien **antes de irse**: no hay forma de concedérselo uno mismo.
+El permiso se ve y se mueve en la columna **Otorgar gerencia** de la tabla. En
+cada fila dice **Sí, puede ✓** o **No**; si tú lo tienes, esos textos son botones
+y basta con pulsarlos.
 
-[CAPTURA: fila de un usuario en la tabla, con el selector de rol desplegado y la casilla del permiso de otorgar gerencia]
+> **En tu propia fila el texto no es un botón.** Nadie cambia su propio permiso,
+> ni siquiera quien lo tiene. Si te lo quitaras sin habérselo pasado a nadie,
+> el permiso desaparecería del sistema y recuperarlo exigiría tocar la base de
+> datos. Para transferirlo hacen falta dos personas: tú se lo das a alguien, y
+> esa persona te lo retira a ti.
+
+Consecuencia práctica: **si quien lo tiene deja la empresa, tiene que pasárselo
+a alguien antes de irse.**
+
+[CAPTURA: columna "Otorgar gerencia" en la tabla de Usuarios, con una fila en "Sí, puede ✓" y otra en "No"]
 
 ### Dar de baja a alguien que sale de la empresa
 
@@ -691,6 +709,13 @@ etiquetada según a quién afecta.
 
 Hoy vigila dos cuentas: **KALLPA** y **SPGL**. Una misma norma puede llevar las
 dos etiquetas.
+
+> ⚠️ **Al 4 de agosto de 2026 el monitor no está corriendo solo.** La tarea
+> programada se dispara puntualmente dos veces al día y GitHub la reporta como
+> exitosa, pero la petición no llega a ejecutarse: el guardián de sesión del
+> sistema la desvía antes. Desde el 30 de julio no se ha enviado ningún aviso.
+> El botón **Correr ahora** de esta pantalla sí funciona. Está documentado con
+> el diagnóstico y la corrección en `INVENTARIO_COMPLETO.md`.
 
 ### El panel de la automatización
 
@@ -848,7 +873,14 @@ Y si puedes, la hora aproximada.
 
 ## A quién avisar
 
-`[PENDIENTE: definir a quién se le reportan los problemas]`
+A **Sergio Saldaña** — `ssaldana@metrica.pe`.
+
+Escríbele con los tres datos de arriba. Con eso normalmente basta; sin eso, lo
+primero que va a hacer es pedírtelos.
+
+Si lo que pasó tiene que ver con **dinero, un documento ya emitido o una
+anulación**, avisa de inmediato aunque no tengas los tres datos completos. Esos
+casos se resuelven mejor cuanto antes.
 
 ---
 
