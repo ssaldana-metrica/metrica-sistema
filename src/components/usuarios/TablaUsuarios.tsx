@@ -6,6 +6,7 @@ import {
   cambiarActivo,
   cambiarRol,
   cambiarPuedeReactivar,
+  cambiarPuedeOtorgarGerencia,
 } from '@/actions/usuarios';
 import { ROLES, type Rol } from '@/lib/roles';
 import { useToast } from '@/components/ui/Toast';
@@ -17,6 +18,7 @@ export type UsuarioFila = {
   rol: Rol;
   activo: boolean;
   puedeReactivar: boolean;
+  puedeOtorgarGerencia: boolean;
 };
 
 const ETIQUETA_ROL: Record<Rol, string> = {
@@ -28,14 +30,26 @@ const ETIQUETA_ROL: Record<Rol, string> = {
 export function TablaUsuarios({
   usuarios,
   yoId,
+  puedoOtorgarGerencia,
 }: {
   usuarios: UsuarioFila[];
   yoId: string;
+  // Convertir a alguien en gerencia es un permiso aparte del rol. Quien no lo
+  // tiene ni siquiera ve la opción en el selector: la base lo rechazaría igual
+  // (migración 0033), pero ofrecer algo que va a fallar es una mala pantalla.
+  puedoOtorgarGerencia: boolean;
 }) {
   const router = useRouter();
   const toast = useToast();
   const [guardando, startTransition] = useTransition();
   const [ocupado, setOcupado] = useState<string | null>(null);
+
+  // Gerencia solo aparece como opción para quien puede otorgarla, y para las
+  // filas que YA son gerencia (si no, su rol actual no se podría mostrar).
+  const rolesDisponibles = (u: UsuarioFila) =>
+    ROLES.filter(
+      (r) => r !== 'gerencia' || puedoOtorgarGerencia || u.rol === 'gerencia',
+    );
 
   function fijarRol(u: UsuarioFila, rol: Rol) {
     if (rol === u.rol) return;
@@ -83,10 +97,26 @@ export function TablaUsuarios({
     });
   }
 
+  function alternarOtorgarGerencia(u: UsuarioFila) {
+    const nuevo = !u.puedeOtorgarGerencia;
+    setOcupado(u.id);
+    startTransition(async () => {
+      const r = await cambiarPuedeOtorgarGerencia(u.id, nuevo);
+      setOcupado(null);
+      if ('error' in r) toast({ tipo: 'error', texto: r.error });
+      else {
+        toast({
+          texto: `${u.nombre} ${nuevo ? 'ahora puede' : 'ya no puede'} otorgar el rol de gerencia.`,
+        });
+        router.refresh();
+      }
+    });
+  }
+
   return (
     <div className="overflow-hidden rounded-xl border border-linea bg-white shadow-tarjeta">
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[760px] border-collapse">
+        <table className="w-full min-w-[900px] border-collapse">
           <thead>
             <tr className="bg-superficie text-left text-[11px] uppercase tracking-wide text-tinta-tenue">
               <th className="px-5 py-3 font-semibold">Nombre</th>
@@ -94,6 +124,7 @@ export function TablaUsuarios({
               <th className="px-5 py-3 font-semibold">Rol</th>
               <th className="px-5 py-3 font-semibold">Estado</th>
               <th className="px-5 py-3 font-semibold">Reactivar anulaciones</th>
+              <th className="px-5 py-3 font-semibold">Otorgar gerencia</th>
               <th className="px-5 py-3 font-semibold" />
             </tr>
           </thead>
@@ -126,7 +157,7 @@ export function TablaUsuarios({
                       onChange={(e) => fijarRol(u, e.target.value as Rol)}
                       className="rounded-md border border-linea bg-white px-2 py-1.5 text-[12.5px] outline-none focus:border-petroleo disabled:bg-superficie disabled:text-tinta-tenue"
                     >
-                      {ROLES.map((r) => (
+                      {rolesDisponibles(u).map((r) => (
                         <option key={r} value={r}>
                           {ETIQUETA_ROL[r]}
                         </option>
@@ -162,6 +193,37 @@ export function TablaUsuarios({
                       >
                         {u.puedeReactivar ? 'Sí, puede ✓' : 'No'}
                       </button>
+                    )}
+                  </td>
+                  {/* Quién puede crear más gerencias. La columna se muestra
+                      siempre —para que se sepa a quién pedírselo— pero solo la
+                      mueve quien ya tiene el permiso, y nunca sobre su propia
+                      fila: si se lo quitara sin habérselo pasado a nadie, el
+                      permiso desaparecería del sistema (migración 0035). */}
+                  <td className="px-5 py-3">
+                    {puedoOtorgarGerencia && !soyYo ? (
+                      <button
+                        onClick={() => alternarOtorgarGerencia(u)}
+                        disabled={fila}
+                        className={`rounded-md border px-2.5 py-1 text-[11.5px] font-semibold transition disabled:opacity-50 ${
+                          u.puedeOtorgarGerencia
+                            ? 'border-verde/40 text-verde hover:bg-verde-fondo'
+                            : 'border-linea text-tinta-tenue hover:bg-superficie'
+                        }`}
+                      >
+                        {u.puedeOtorgarGerencia ? 'Sí, puede ✓' : 'No'}
+                      </button>
+                    ) : (
+                      <span
+                        className="text-[12px] text-tinta-tenue"
+                        title={
+                          soyYo
+                            ? 'Tu propio permiso lo cambia otra persona'
+                            : 'Solo quien ya tiene el permiso puede concederlo'
+                        }
+                      >
+                        {u.puedeOtorgarGerencia ? 'Sí, puede' : 'No'}
+                      </span>
                     )}
                   </td>
                   <td className="px-5 py-3 text-right">

@@ -1037,7 +1037,7 @@ export function FichaEditor(props: FichaEditorProps) {
                       title="Reabre la ficha para corregir el seguimiento, sin avisar al ejecutivo"
                       className="rounded-lg border border-linea bg-white px-4 py-2 text-[13px] font-semibold transition hover:bg-superficie disabled:opacity-60"
                     >
-                      Reabrir para administración
+                      Corregir seguimiento (sin avisar)
                     </button>
                   )}
                   <button
@@ -1116,7 +1116,7 @@ export function FichaEditor(props: FichaEditorProps) {
                 disabled={guardando}
                 className="rounded-lg bg-petroleo px-4 py-2 text-[13px] font-semibold text-white transition hover:bg-petroleo-oscuro disabled:opacity-60"
               >
-                {guardando ? 'Enviando…' : 'Reabrir y avisar'}
+                {guardando ? 'Enviando…' : 'Devolver la ficha al ejecutivo'}
               </button>
             </div>
           </div>

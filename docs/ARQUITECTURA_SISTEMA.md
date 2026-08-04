@@ -6,9 +6,9 @@
 >
 > | | |
 > |---|---|
-> | Última verificación | 3 de agosto de 2026 |
-> | Rama documentada | `main` · commit `be1d104` |
-> | Migraciones aplicadas | 32 (coinciden con los archivos de `main`) |
+> | Última verificación | 4 de agosto de 2026 |
+> | Rama documentada | `main` · commit `429516c` |
+> | Migraciones aplicadas | 35 (coinciden con los archivos del repositorio) |
 >
 > **Es un documento vivo.** Vive junto al código para que se actualice en el
 > mismo commit que cambia lo que describe. Si algo no coincide con la realidad,
@@ -130,14 +130,15 @@ legible a simple vista, sin consultar el sistema.
 
 ## 4. Modelo de datos
 
-25 tablas, agrupadas por módulo. **Todas tienen seguridad a nivel de fila
+26 tablas, agrupadas por módulo. **Todas tienen seguridad a nivel de fila
 activada.**
 
 ### Base compartida
 
 | Tabla | Qué guarda |
 |---|---|
-| `usuarios` | Quién puede entrar, con su rol y si está activo. Se llena solo al primer ingreso con Google |
+| `usuarios` | Quién puede entrar, con su rol y si está activo. Se llena solo al primer ingreso con Google. Lleva además dos permisos sueltos —`puede_reactivar` y `puede_otorgar_gerencia`— y quién concedió el rol actual |
+| `solicitudes_rol` | Quién pidió qué rol, quién lo resolvió y cuándo. Las resueltas se acumulan: son el historial |
 | `clientes` | Empresas a las que se les cotiza: razón social, RUC, nombre comercial |
 | `proveedores` | Empresas y personas a las que se les compra |
 
@@ -182,7 +183,7 @@ activada.**
 
 | Tabla | Qué guarda |
 |---|---|
-| `ordenes_proveedores` | Orden suelta para gasto propio. **Sin ninguna clave foránea al resto del sistema** |
+| `ordenes_proveedores` | Orden suelta para gasto propio. **Sin ninguna clave foránea al resto del sistema.** Guarda también la factura que manda el proveedor (`factura_numero`, `factura_recibida_en`) con quién la cargó y cuándo |
 | `orden_proveedor_detalles` | Sus líneas de compra |
 | `ordenes_proveedores_borradas` | Archivo de las que se borraron: la fila completa en JSON, quién la borró y cuándo |
 
@@ -229,14 +230,40 @@ metricaperu.com
 Cualquier otro correo es rechazado en la vuelta de Google, antes de crear
 sesión.
 
-**Al primer ingreso, la persona elige su propio rol entre Ejecutivo y
-Administración.** Nadie puede autoasignarse Gerencia — ese lo otorga gerencia
-desde el módulo de Usuarios. Una vez registrada, tampoco puede recategorizarse:
-`elegirRol()` comprueba si ya existe y, de existir, no la deja volver a elegir.
+**Al primer ingreso la persona elige entre Ejecutivo y Administración, pero la
+fila que se crea es siempre `ejecutivo`** (`elegirRol()` en
+`src/actions/onboarding.ts`). Si pidió Administración, además se inserta una
+fila en `solicitudes_rol` con estado `pendiente` y se avisa por correo a toda
+la gerencia activa. Una vez registrada la persona no puede volver a elegir:
+`elegirRol()` comprueba si ya existe.
 
-> ⚠️ **Esto difiere de lo que se decidió en la Fase 1**, donde el acuerdo fue que
-> el usuario nuevo se creara como Ejecutivo y gerencia ajustara después. Ver el
-> hallazgo abierto en la §10.
+Conviene subrayar por qué esto es sólido y no cosmético: **quien espera no es un
+administrador con el menú escondido, su rol en la base *es* `ejecutivo`**. Todas
+las barreras que ya existían para un ejecutivo —RLS, disparadores,
+comprobaciones del servidor— le aplican sin que haya que escribir ninguna regla
+nueva. Verificado por comportamiento: con la solicitud pendiente, un `UPDATE`
+directo sobre una cotización ajena para aprobarla afecta **0 filas**; tras
+aprobarle la solicitud, la misma sentencia funciona.
+
+La solicitud la resuelve gerencia desde el módulo de Usuarios. Dos candados en
+la base (migración 0033):
+
+| Regla | Dónde vive | Qué impide |
+|---|---|---|
+| Solo gerencia resuelve solicitudes | `trg_solicitud_no_propia()` + política `solicitudes_resolver` | Que un ejecutivo o administración se conceda el rol |
+| Nadie resuelve la suya | `trg_solicitud_no_propia()` | Que una gerencia con solicitud propia se la apruebe |
+
+**El rol de Gerencia es aparte.** No lo concede cualquier gerencia, sino solo
+quien tenga la columna `usuarios.puede_otorgar_gerencia`. Es un dato, no una
+regla escrita en código: se transfiere desde la pantalla de Usuarios sin tocar
+nada. La migración 0035 añadió que **nadie lo cambia sobre su propia fila** —si
+la única persona que lo tiene se lo quitara, el permiso desaparecería del
+sistema y solo volvería con otra migración.
+
+Las tres decisiones —conceder el rol, rechazarlo, mover el permiso— quedan con
+autor y fecha: `solicitudes_rol.resuelta_por/resuelta_en` y
+`usuarios.rol_otorgado_por/rol_otorgado_en`. Las solicitudes resueltas no se
+borran (`trg_no_borrar`): son el historial de quién pidió qué y quién decidió.
 
 Un usuario dado de baja **a mitad de sesión** también queda fuera: su login de
 Google sigue vivo, pero su fila en `usuarios` deja de responder y el sistema lo
@@ -259,7 +286,7 @@ existen para dar mensajes claros; las de la base son las que de verdad impiden.
 
 ### Los tres roles
 
-Verificado contra las **71 políticas RLS** reales.
+Verificado contra las **73 políticas RLS** reales.
 
 | | Ejecutivo | Administración | Gerencia |
 |---|---|---|---|
@@ -274,6 +301,9 @@ Verificado contra las **71 políticas RLS** reales.
 | Ver el estado e historial de automatizaciones | ✅ | ✅ | ✅ |
 | Administrar automatizaciones | ❌ | ❌ | ✅ |
 | Gestionar usuarios y roles | ❌ | ❌ | ✅ |
+| Ver solicitudes de rol | solo la suya | solo la suya | ✅ |
+| Resolver solicitudes de rol | ❌ | ❌ | ✅ salvo la propia |
+| Otorgar el rol de Gerencia | ❌ | ❌ | solo con `puede_otorgar_gerencia` |
 
 Todas las políticas se apoyan en dos funciones: `fn_mi_id()` y `fn_mi_rol()`,
 que leen el correo del token de sesión y devuelven la identidad y el rol
@@ -388,7 +418,7 @@ la fila completa y quién la borró.
 
 #### Funciones con privilegios
 
-Las **13 funciones `SECURITY DEFINER`** del sistema tienen `SET search_path =
+Las **15 funciones `SECURITY DEFINER`** del sistema tienen `SET search_path =
 public`. Sin eso, alguien podría colar un objeto con el mismo nombre en otro
 esquema y hacer que la función ejecute algo distinto de lo que debería.
 
@@ -623,7 +653,7 @@ migraciones `0029` a la `0032`.
 ### 🔴 1 · Una tabla sin protección — RESUELTO
 
 **Qué se encontró.** `oda_prov_correlativo` no tenía RLS activado. Era la única
-de las 25 tablas así. Cualquiera con la llave pública —que viaja en el navegador
+de las 26 tablas así. Cualquiera con la llave pública —que viaja en el navegador
 y por lo tanto es visible— podía leerla y **escribirla**.
 
 **Por qué importaba.** Esa tabla guarda el último número de orden entregado.
@@ -694,18 +724,18 @@ borrar un borrador funciona y queda archivado con autor y fecha.
 | **Destinatarios del monitor** | Antes el sistema aceptaba cualquier correo y la garantía era la disciplina. Ahora un `CHECK` en la base impide agregar uno fuera de los dominios de Métrica |
 | **Correo fijo en el código** | `normas-monitor.ts` tenía un correo personal escrito. Ahora el modo prueba manda a quien pulsa el botón, o a los usuarios con rol gerencia si la dispara la tarea programada |
 
-### 🔶 6 · Cualquiera puede autoasignarse rol Administración — ABIERTO
+### 🟡 6 · Cualquiera podía autoasignarse rol Administración — RESUELTO
 
 **Qué se encontró.** En la Fase 1 se decidió que un usuario nuevo se creara con
-rol Ejecutivo y que gerencia lo ajustara después. **El código no hace eso:**
-`elegirRol()` en `src/actions/onboarding.ts` acepta `'admin' | 'ejecutivo'` y
-registra a la persona con el rol que ella misma elija en la pantalla
+rol Ejecutivo y que gerencia lo ajustara después. **El código no hacía eso:**
+`elegirRol()` en `src/actions/onboarding.ts` aceptaba `'admin' | 'ejecutivo'` y
+registraba a la persona con el rol que ella misma eligiera en la pantalla
 `/elegir-rol`.
 
-**Por qué importa.** El rol Administración da permiso para **aprobar
-cotizaciones**, emitir órdenes de compra y ver toda la información comercial. Hoy
-cualquier persona con un correo de los dominios permitidos puede tomarlo en su
-primer ingreso, sin que nadie lo autorice.
+**Por qué importaba.** El rol Administración da permiso para **aprobar
+cotizaciones**, emitir órdenes de compra y ver toda la información comercial.
+Cualquier persona con un correo de los dominios permitidos podía tomarlo en su
+primer ingreso, sin que nadie lo autorizara.
 
 Conviene medir bien el riesgo, sin exagerarlo ni minimizarlo. El acceso está
 limitado a correos `@metrica.pe` y `@metricaperu.com`, así que no es una puerta
@@ -715,13 +745,26 @@ autorización**, y eso deja cojo el control de cuatro ojos que se blindó en la
 migración `0030`: ese candado impide aprobar *lo propio*, pero no impide que
 alguien se dé a sí mismo el rol para aprobar *lo de los demás*.
 
-**Recomendación.** Cambiar `elegirRol()` para que registre siempre con rol
-`ejecutivo`, y que Administración la conceda gerencia desde el módulo de
-Usuarios — que ya existe y ya hace exactamente eso. Es un cambio pequeño y
-acotado.
+**Cómo se cerró** (migraciones `0033` y `0035`, detalle en la §5):
 
-**Estado:** documentado y pendiente de decisión. No se modificó el código porque
-excede lo que se pidió en esta auditoría.
+- `elegirRol()` registra **siempre** con rol `ejecutivo`. Si la persona pidió
+  Administración, se abre una fila en `solicitudes_rol` y se avisa por correo a
+  la gerencia activa.
+- Quien espera **es** un ejecutivo en la base, no un administrador con el menú
+  oculto: hereda todas las barreras que ya existían, sin reglas nuevas.
+- `trg_solicitud_no_propia()` impide que alguien resuelva su propia solicitud,
+  gerencia incluida.
+- El rol de Gerencia se separó en un permiso aparte,
+  `usuarios.puede_otorgar_gerencia`, que es un **dato** y no un correo escrito
+  dentro de una función — el error que la `0013` cometió y la `0017` tuvo que
+  reparar. La `0035` añadió que nadie lo cambia sobre su propia fila, para que
+  el permiso no pueda desaparecer del sistema.
+
+**Verificación por comportamiento**, no por lectura de código. Con sesiones
+simuladas: un ejecutivo con solicitud pendiente no ve ni una cotización y su
+`UPDATE` de aprobación afecta 0 filas; aprobada la solicitud, la misma sentencia
+funciona; una gerencia sin el permiso no consigue crear otra gerencia ni
+autoconcederse el permiso, y sí puede seguir cambiando el resto de roles.
 
 ### 🔶 7 · El plan de Vercel no permite uso comercial — ABIERTO
 

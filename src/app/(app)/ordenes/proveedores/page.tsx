@@ -6,6 +6,7 @@ import { BotonPdf } from '@/components/ui/BotonPdf';
 import { EstadoVacio, IconosVacio } from '@/components/ui/EstadoVacio';
 import { formatearMonto, type Moneda } from '@/lib/calculos';
 import { BotonNuevaOda } from '@/components/orden-proveedor/BotonNuevaOda';
+import { CeldaFactura } from '@/components/orden-proveedor/CeldaFactura';
 import {
   ETIQUETA_TIPO_PROVEEDOR,
   TIPOS_PROVEEDOR_ODA,
@@ -54,7 +55,8 @@ export default async function PaginaOrdenesProveedores({
     .from('ordenes_proveedores')
     .select(
       `id, codigo, estado, tipo_proveedor, razon_social, nombre_comercial,
-       monto, moneda, pdf_url, updated_at`,
+       monto, moneda, pdf_url, updated_at,
+       factura_numero, factura_recibida_en`,
     )
     .order('updated_at', { ascending: false })
     .limit(MAX_FILAS);
@@ -83,6 +85,8 @@ export default async function PaginaOrdenesProveedores({
       month: 'short',
       timeZone: 'America/Lima',
     }),
+    facturaNumero: (o.factura_numero as string) ?? '',
+    facturaRecibidaEn: (o.factura_recibida_en as string) ?? null,
   }));
 
   // Conserva los demás filtros al cambiar uno: quien filtró por Suscripciones y
@@ -194,7 +198,7 @@ export default async function PaginaOrdenesProveedores({
       {filas.length > 0 ? (
         <div className="overflow-hidden rounded-xl border border-linea bg-white shadow-tarjeta">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[680px] border-collapse">
+            <table className="w-full min-w-[820px] border-collapse">
               <thead>
                 <tr className="bg-superficie text-left text-[11px] uppercase tracking-wide text-tinta-tenue">
                   <th className="px-5 py-3 font-semibold">Código ODA</th>
@@ -204,6 +208,7 @@ export default async function PaginaOrdenesProveedores({
                   <th className="px-5 py-3 font-semibold">Estado</th>
                   <th className="px-5 py-3 font-semibold">PDF</th>
                   <th className="px-5 py-3 font-semibold">Actualizada</th>
+                  <th className="px-5 py-3 font-semibold">Factura del proveedor</th>
                 </tr>
               </thead>
               <tbody>
@@ -236,6 +241,14 @@ export default async function PaginaOrdenesProveedores({
                       <BotonPdf href={f.pdfHref} />
                     </td>
                     <td className="px-5 py-3 text-tinta-suave">{f.actualizada}</td>
+                    <td className="px-5 py-2 align-top">
+                      <CeldaFactura
+                        ordenId={f.id}
+                        emitida={f.estado === 'emitida'}
+                        numeroInicial={f.facturaNumero}
+                        fechaInicial={f.facturaRecibidaEn}
+                      />
+                    </td>
                   </tr>
                 ))}
               </tbody>

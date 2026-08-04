@@ -4,12 +4,29 @@ import { redirect } from 'next/navigation';
 import { crearClienteServidor } from '@/lib/supabase/server';
 import { crearClienteAdmin } from '@/lib/supabase/admin';
 import { dominioPermitido } from '@/config/dominios';
+import { avisarSolicitudDeRol } from '@/lib/correo-usuarios';
 
-// Alta del usuario nuevo con el rol que él mismo elige (Administración o
-// Ejecutivo). Gerencia NO se puede autoasignar: la otorga Gerencia desde el
-// módulo de Usuarios. Usa el correo de la sesión de Google (no un parámetro),
-// así nadie se registra a nombre de otro. Tras el alta va al selector de
-// sistemas ("/").
+// Alta del usuario nuevo.
+//
+// La persona elige entre Ejecutivo y Administración, pero el rol NO se le
+// concede sin más:
+//
+//   · Ejecutivo      → se le da al instante. Es el rol base, no aprueba nada, y
+//                      así nadie se queda sin poder trabajar el primer día.
+//   · Administración → entra como EJECUTIVO y queda una solicitud pendiente
+//                      para que gerencia la resuelva. Puede cotizar y llenar
+//                      sus fichas mientras espera.
+//
+// Lo importante del segundo caso: la persona no es un administrador con el menú
+// escondido. Su rol en la base ES 'ejecutivo', así que todas las barreras que ya
+// existen para un ejecutivo le aplican solas. No hace falta ninguna regla nueva
+// que alguien pueda olvidar más adelante.
+//
+// Gerencia no se puede solicitar: ese rol lo otorga a mano quien tenga el
+// permiso, desde el módulo de Usuarios.
+//
+// Usa el correo de la sesión de Google (no un parámetro), así nadie se registra
+// a nombre de otro.
 export async function elegirRol(
   rol: 'admin' | 'ejecutivo',
 ): Promise<{ error: string } | never> {
@@ -33,7 +50,7 @@ export async function elegirRol(
     .eq('correo', correo)
     .maybeSingle();
 
-  // Ya tiene rol: no puede recategorizarse a sí mismo.
+  // Ya tiene cuenta: no puede recategorizarse a sí mismo.
   if (existente) {
     if (!existente.activo) {
       await supabase.auth.signOut();
@@ -47,11 +64,32 @@ export async function elegirRol(
     (user.user_metadata?.name as string | undefined) ??
     correo.split('@')[0];
 
-  const { error } = await admin
+  // Siempre nace como ejecutivo, pida lo que pida.
+  const { data: creado, error } = await admin
     .from('usuarios')
-    .insert({ nombre, correo, rol });
-  if (error) {
+    .insert({ nombre, correo, rol: 'ejecutivo' })
+    .select('id')
+    .single();
+
+  if (error || !creado) {
     return { error: 'No se pudo registrar tu cuenta. Intenta de nuevo.' };
+  }
+
+  if (rol === 'admin') {
+    const { error: errSolicitud } = await admin.from('solicitudes_rol').insert({
+      usuario_id: creado.id,
+      rol_solicitado: 'admin',
+    });
+
+    // Si la solicitud falla, la cuenta ya existe y la persona puede trabajar
+    // como ejecutivo. Se la deja entrar en vez de dejarla afuera; gerencia
+    // puede cambiarle el rol a mano desde Usuarios.
+    if (!errSolicitud) {
+      // El aviso a gerencia no bloquea el ingreso. Si el correo falla, la
+      // solicitud sigue visible en la pantalla de Usuarios, que es donde de
+      // verdad se resuelve.
+      await avisarSolicitudDeRol({ nombre, correo });
+    }
   }
 
   redirect('/');

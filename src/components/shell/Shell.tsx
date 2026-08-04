@@ -9,10 +9,14 @@ import { Sidebar, type GrupoNav } from './Sidebar';
 export function Shell({
   grupos,
   encabezado,
+  aviso,
   children,
 }: {
   grupos: GrupoNav[];
   encabezado: ReactNode;
+  // Franja que se muestra sobre el contenido en TODAS las pantallas. Hoy la usa
+  // el aviso de solicitud de rol pendiente. Nula cuando no hay nada que avisar.
+  aviso?: ReactNode;
   children: ReactNode;
 }) {
   const [abierto, setAbierto] = useState(false);
@@ -59,6 +63,7 @@ export function Shell({
           <div className="ml-auto flex items-center gap-4">{encabezado}</div>
         </header>
 
+        {aviso}
         <main className="flex-1 p-5 sm:p-8">{children}</main>
       </div>
     </div>
