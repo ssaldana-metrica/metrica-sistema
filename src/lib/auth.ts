@@ -12,6 +12,16 @@ export type Usuario = {
   rol: Rol;
   activo: boolean;
   puedeReactivar: boolean;
+  /**
+   * Puede aprobar u observar cotizaciones.
+   *
+   * Es un permiso aparte del rol (migración 0037): tener Administración da
+   * acceso a las órdenes y a la tabla de control, pero aprobar —que es
+   * comprometer plata— lo concede gerencia persona por persona.
+   *
+   * Ya viene resuelto: gerencia siempre puede, sin necesitar la columna.
+   */
+  puedeAprobar: boolean;
 };
 
 // Devuelve el usuario logueado y su registro en la tabla `usuarios`,
@@ -40,7 +50,7 @@ export const obtenerSesion = cache(async (): Promise<{
   // un usuario dado de baja recibe null aquí aunque tenga sesión de Google.
   const { data: fila } = await supabase
     .from('usuarios')
-    .select('id, nombre, correo, rol, activo, puede_reactivar')
+    .select('id, nombre, correo, rol, activo, puede_reactivar, puede_aprobar_cotizaciones')
     .eq('correo', correo)
     .eq('activo', true)
     .maybeSingle();
@@ -54,6 +64,8 @@ export const obtenerSesion = cache(async (): Promise<{
       rol: fila.rol as Rol,
       activo: fila.activo as boolean,
       puedeReactivar: Boolean(fila.puede_reactivar),
+      puedeAprobar:
+        fila.rol === 'gerencia' || Boolean(fila.puede_aprobar_cotizaciones),
     },
   };
 });

@@ -7,6 +7,7 @@ import {
   cambiarRol,
   cambiarPuedeReactivar,
   cambiarPuedeOtorgarGerencia,
+  cambiarPuedeAprobar,
 } from '@/actions/usuarios';
 import { ROLES, type Rol } from '@/lib/roles';
 import { useToast } from '@/components/ui/Toast';
@@ -19,6 +20,7 @@ export type UsuarioFila = {
   activo: boolean;
   puedeReactivar: boolean;
   puedeOtorgarGerencia: boolean;
+  puedeAprobar: boolean;
 };
 
 const ETIQUETA_ROL: Record<Rol, string> = {
@@ -97,6 +99,25 @@ export function TablaUsuarios({
     });
   }
 
+  function alternarAprobar(u: UsuarioFila) {
+    const nuevo = !u.puedeAprobar;
+    setOcupado(u.id);
+    startTransition(async () => {
+      const r = await cambiarPuedeAprobar(u.id, nuevo);
+      setOcupado(null);
+      if ('error' in r) toast({ tipo: 'error', texto: r.error });
+      else {
+        toast({
+          tipo: nuevo ? 'exito' : 'info',
+          texto: nuevo
+            ? `${u.nombre} ahora puede aprobar cotizaciones.`
+            : `${u.nombre} ya no aprueba cotizaciones ni recibe sus avisos.`,
+        });
+        router.refresh();
+      }
+    });
+  }
+
   function alternarOtorgarGerencia(u: UsuarioFila) {
     const nuevo = !u.puedeOtorgarGerencia;
     setOcupado(u.id);
@@ -116,13 +137,14 @@ export function TablaUsuarios({
   return (
     <div className="overflow-hidden rounded-xl border border-linea bg-white shadow-tarjeta">
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[900px] border-collapse">
+        <table className="w-full min-w-[1040px] border-collapse">
           <thead>
             <tr className="bg-superficie text-left text-[11px] uppercase tracking-wide text-tinta-tenue">
               <th className="px-5 py-3 font-semibold">Nombre</th>
               <th className="px-5 py-3 font-semibold">Correo</th>
               <th className="px-5 py-3 font-semibold">Rol</th>
               <th className="px-5 py-3 font-semibold">Estado</th>
+              <th className="px-5 py-3 font-semibold">Aprobar cotizaciones</th>
               <th className="px-5 py-3 font-semibold">Reactivar anulaciones</th>
               <th className="px-5 py-3 font-semibold">Otorgar gerencia</th>
               <th className="px-5 py-3 font-semibold" />
@@ -175,6 +197,37 @@ export function TablaUsuarios({
                       <span className="h-1.5 w-1.5 rounded-full bg-current" />
                       {u.activo ? 'Activo' : 'De baja'}
                     </span>
+                  </td>
+                  {/* Aprobar cotizaciones es comprometer plata, así que no
+                      viene con el rol: lo concede gerencia fila por fila. A
+                      quien esté en No se le esconde la sección Aprobaciones y
+                      deja de recibir el aviso de cotización pendiente — el
+                      correo sin el botón sería una invitación a nada. */}
+                  <td className="px-5 py-3">
+                    {u.rol === 'gerencia' ? (
+                      <span className="text-[12px] text-tinta-tenue">
+                        Sí (gerencia)
+                      </span>
+                    ) : u.rol === 'ejecutivo' ? (
+                      <span
+                        className="text-[12px] text-tinta-tenue"
+                        title="Un ejecutivo nunca aprueba cotizaciones, tenga o no el permiso"
+                      >
+                        —
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => alternarAprobar(u)}
+                        disabled={fila}
+                        className={`rounded-md border px-2.5 py-1 text-[11.5px] font-semibold transition disabled:opacity-50 ${
+                          u.puedeAprobar
+                            ? 'border-verde/40 text-verde hover:bg-verde-fondo'
+                            : 'border-rojo/30 text-rojo hover:bg-rojo-fondo'
+                        }`}
+                      >
+                        {u.puedeAprobar ? 'Sí, puede ✓' : 'No'}
+                      </button>
+                    )}
                   </td>
                   <td className="px-5 py-3">
                     {u.rol === 'gerencia' ? (

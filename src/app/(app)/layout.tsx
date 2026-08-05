@@ -35,6 +35,10 @@ export default async function LayoutProtegido({
 
   const { usuario } = sesion;
   const esAdmin = usuario.rol === 'admin' || usuario.rol === 'gerencia';
+  // Aprobar es un permiso aparte del rol (migración 0037). Quien no lo tiene
+  // conserva Órdenes y Tabla de control, pero no ve Aprobaciones: mostrarle una
+  // cola que no puede resolver solo genera la pregunta de por qué falla.
+  const puedeAprobar = esAdmin && usuario.puedeAprobar;
 
   // ¿Esta persona pidió otro rol y todavía se lo están resolviendo? Se le avisa
   // en todas las pantallas: sin eso ve un menú incompleto y no sabe por qué,
@@ -56,7 +60,7 @@ export default async function LayoutProtegido({
 
   // Contador de pendientes para el badge de Aprobaciones
   let pendientes = 0;
-  if (esAdmin) {
+  if (puedeAprobar) {
     const supabase = await crearClienteServidor();
     const { count } = await supabase
       .from('cotizaciones')
@@ -80,12 +84,16 @@ export default async function LayoutProtegido({
     grupos.push({
       titulo: 'Administración',
       items: [
-        {
-          href: '/aprobaciones',
-          etiqueta: 'Aprobaciones',
-          icono: 'aprobaciones',
-          badge: pendientes,
-        },
+        ...(puedeAprobar
+          ? [
+              {
+                href: '/aprobaciones',
+                etiqueta: 'Aprobaciones',
+                icono: 'aprobaciones' as const,
+                badge: pendientes,
+              },
+            ]
+          : []),
         {
           // Desplegable: no lleva a ninguna parte por sí solo. Son dos mundos
           // distintos —las de proyecto nacen de una ficha, las de proveedores

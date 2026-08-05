@@ -8,7 +8,7 @@
 > |---|---|
 > | Última verificación | 4 de agosto de 2026 |
 > | Rama documentada | `main` · commit `7586916` |
-> | Migraciones aplicadas | 36 (coinciden con los archivos del repositorio) |
+> | Migraciones aplicadas | 37 (coinciden con los archivos del repositorio) |
 >
 > **Es un documento vivo.** Vive junto al código para que se actualice en el
 > mismo commit que cambia lo que describe. Si algo no coincide con la realidad,
@@ -142,7 +142,7 @@ activada.**
 
 | Tabla | Qué guarda |
 |---|---|
-| `usuarios` | Quién puede entrar, con su rol y si está activo. Se llena solo al primer ingreso con Google. Lleva además dos permisos sueltos —`puede_reactivar` y `puede_otorgar_gerencia`— y quién concedió el rol actual |
+| `usuarios` | Quién puede entrar, con su rol y si está activo. Se llena solo al primer ingreso con Google. Lleva además tres permisos sueltos —`puede_aprobar_cotizaciones`, `puede_reactivar` y `puede_otorgar_gerencia`— y quién concedió el rol actual |
 | `solicitudes_rol` | Quién pidió qué rol, quién lo resolvió y cuándo. Las resueltas se acumulan: son el historial |
 | `clientes` | Empresas a las que se les cotiza: razón social, RUC, nombre comercial |
 | `proveedores` | Empresas y personas a las que se les compra |
@@ -298,7 +298,8 @@ Verificado contra las **73 políticas RLS** reales.
 | Ver el banco de códigos | ✅ | ✅ | ✅ |
 | Crear y editar **sus** cotizaciones | ✅ | ✅ | ✅ |
 | Ver cotizaciones **ajenas** | ❌ | ✅ | ✅ |
-| Aprobar, observar o anular cotizaciones | ❌ | ✅ | ✅ |
+| Anular cotizaciones | ❌ | ✅ | ✅ |
+| **Aprobar u observar cotizaciones** | ❌ | solo con `puede_aprobar_cotizaciones` | ✅ |
 | Ver y editar fichas de apertura | solo las suyas | ✅ | ✅ |
 | Órdenes de adquisición | ❌ | ✅ | ✅ |
 | Órdenes a proveedores | ❌ | ✅ | ✅ |
@@ -309,6 +310,7 @@ Verificado contra las **73 políticas RLS** reales.
 | Ver solicitudes de rol | solo la suya | solo la suya | ✅ |
 | Resolver solicitudes de rol | ❌ | ❌ | ✅ salvo la propia |
 | Otorgar el rol de Gerencia | ❌ | ❌ | solo con `puede_otorgar_gerencia` |
+| Decidir quién aprueba cotizaciones | ❌ | ❌ | ✅ salvo su propia fila |
 
 Todas las políticas se apoyan en dos funciones: `fn_mi_id()` y `fn_mi_rol()`,
 que leen el correo del token de sesión y devuelven la identidad y el rol
@@ -403,6 +405,27 @@ del estado `anulado` a `en_uso`. Pero se lo devuelve **al mismo documento que
 siempre lo tuvo**, no a uno nuevo. La regla que importa —que dos documentos
 distintos nunca lleven el mismo número— se mantiene intacta. Ver el detalle
 abajo.
+
+#### Aprobar es un permiso, no el rol
+
+Desde la migración `0037`, tener rol de Administración **no implica** poder
+aprobar. El rol da acceso a las órdenes, la tabla de control y la información
+comercial; aprobar u observar una cotización —que es comprometer plata— lo
+concede gerencia persona por persona, en la columna
+`usuarios.puede_aprobar_cotizaciones`.
+
+Gerencia siempre puede, sin necesitar la columna: la comprobación es
+`rol = 'gerencia' or puede_aprobar_cotizaciones`, el mismo criterio que
+`puede_reactivar`.
+
+Observar exige el mismo permiso que aprobar, porque es la otra mitad de la misma
+decisión: sin eso, quien no puede aprobar podría bloquear el proceso devolviendo
+todo lo que no le conviniera. **Anular sí queda con el rol**: es un acto
+administrativo con motivo obligatorio y traza, no una decisión de gasto.
+
+La barrera real está en `trg_cotizacion_transicion`. En la pantalla, además, a
+quien no tiene el permiso **se le esconde la sección Aprobaciones y deja de
+recibir el correo** de cotización pendiente — un aviso sin botón es ruido.
 
 #### El candado de no-autoaprobación
 

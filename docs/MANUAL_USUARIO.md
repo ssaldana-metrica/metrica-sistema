@@ -98,7 +98,7 @@ a la izquierda, donde dice **cambiar sistema**.
 | **Banco de códigos** | Los números de cotización del año y cuáles están libres | Todos |
 | **Cotizaciones** | Crear y consultar cotizaciones | Todos |
 | **Fichas de apertura** | Los procesos que nacieron de cotizaciones aprobadas | Todos |
-| **Aprobaciones** | La cola de cotizaciones por revisar | Administración y gerencia |
+| **Aprobaciones** | La cola de cotizaciones por revisar | Gerencia, y quien de administración tenga el permiso |
 | **Órdenes (ODA)** | Las órdenes de compra. Se despliega en *Proyectos* y *Proveedores* | Administración y gerencia |
 | **Tabla de control** | Seguimiento de facturación y cobranza | Administración y gerencia |
 | **Usuarios** | Quién tiene acceso y con qué rol | Solo gerencia |
@@ -112,8 +112,11 @@ Si no ves alguna sección, no es un error: es que tu rol no la tiene.
 **Ejecutivo** — Cotizas trabajos para tus clientes y llenas la parte comercial
 de cada proceso. Ves solo lo tuyo.
 
-**Administración** — Revisas y apruebas las cotizaciones de todos, generas las
-órdenes de compra y llevas el seguimiento de facturación y cobranza.
+**Administración** — Ves las cotizaciones de todos, generas las órdenes de compra
+y llevas el seguimiento de facturación y cobranza. **Aprobar cotizaciones es un
+permiso aparte**: gerencia decide quién de administración lo tiene. Si no lo
+tienes, no ves la sección Aprobaciones ni te llegan sus correos, y todo lo demás
+funciona igual.
 
 **Gerencia** — Todo lo de administración, más gestionar usuarios y las
 automatizaciones.
@@ -690,6 +693,34 @@ Si vuelve, **Reactivar** le devuelve el acceso.
 **No puedes darte de baja a ti mismo.**
 
 [CAPTURA: módulo de Usuarios con la lista, los roles y el botón "Dar de baja"]
+
+### Quién puede aprobar cotizaciones
+
+En la columna **Aprobar cotizaciones** decides, uno por uno, qué administradores
+resuelven la cola. Pulsa **Sí, puede ✓** o **No** en su fila.
+
+Aprobar una cotización es comprometer plata, y no todo el que necesita ver las
+órdenes tiene por qué poder hacerlo. Antes iba con el rol y la única forma de
+quitárselo a alguien era quitarle el rol entero — lo que también le quitaba su
+trabajo diario.
+
+A quien pongas en **No**:
+
+- **Desaparece la sección Aprobaciones** de su menú. Todo lo demás lo conserva:
+  Órdenes, Tabla de control y las cotizaciones de la agencia.
+- **Dejan de llegarle los correos** de cotización pendiente. Un aviso sin botón
+  no sirve de nada.
+- **Tampoco puede devolver una cotización** al ejecutivo. Es la otra mitad de la
+  misma decisión: si pudiera observar todo lo que no le conviene, bloquearía el
+  proceso sin dejar rastro de aprobación.
+- **Sí puede seguir anulando.** Anular es un acto administrativo con motivo
+  obligatorio, no una decisión de gasto.
+
+[CAPTURA: columna "Aprobar cotizaciones" en la tabla de Usuarios, con una fila en "Sí, puede ✓" y otra en "No"]
+
+> **En tu fila dice "Sí (gerencia)" y no se puede tocar.** Gerencia siempre
+> aprueba. Y ojo con dejar a nadie en Sí: la cola se quedaría sin quien la
+> resuelva, salvo tú.
 
 ### El permiso de reactivar anulaciones
 

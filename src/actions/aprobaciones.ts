@@ -38,6 +38,12 @@ async function cargarPendiente(id: string) {
   return { supabase, cot };
 }
 
+// El mensaje es el mismo en las tres acciones: quien no tiene el permiso no
+// debería llegar acá —la sección está escondida— así que si llega es por fuera
+// de la pantalla, y conviene que la respuesta diga exactamente qué falta.
+const SIN_PERMISO =
+  'No tienes el permiso de resolver cotizaciones. Lo concede gerencia desde el módulo de Usuarios.';
+
 function refrescarVistas() {
   revalidatePath('/aprobaciones');
   revalidatePath('/panel');
@@ -50,6 +56,7 @@ function refrescarVistas() {
 // al cliente). Devuelve un enlace de descarga para quien aprueba.
 export async function aprobarCotizacion(id: string): Promise<ResultadoAprobar> {
   const { usuario } = await exigirRol(['admin', 'gerencia']);
+  if (!usuario.puedeAprobar) return { error: SIN_PERMISO };
   const { supabase, cot } = await cargarPendiente(id);
 
   if (!cot) return { error: 'No se encontró la cotización.' };
@@ -212,6 +219,7 @@ export async function reabrirCotizacion(
   id: string,
 ): Promise<{ ok: true } | { error: string }> {
   const { usuario } = await exigirRol(['admin', 'gerencia']);
+  if (!usuario.puedeAprobar) return { error: SIN_PERMISO };
   const supabase = await crearClienteServidor();
   const { data: cot } = await supabase
     .from('cotizaciones')
@@ -267,6 +275,7 @@ export async function observarCotizacion(
   observacion: string,
 ): Promise<ResultadoObservar> {
   const { usuario } = await exigirRol(['admin', 'gerencia']);
+  if (!usuario.puedeAprobar) return { error: SIN_PERMISO };
   if (!observacion.trim())
     return { error: 'Escribe la observación para el ejecutivo.' };
 

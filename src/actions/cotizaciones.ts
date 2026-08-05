@@ -254,11 +254,15 @@ export async function guardarCotizacion(
       try {
         const admin = crearClienteAdmin();
         const [{ data: admins }, { data: cliente }] = await Promise.all([
+          // Solo a quien puede resolverla. Avisar a alguien sin el permiso
+          // sería mandarle a una pantalla que no ve, con un botón que no
+          // tiene: ruido que además le hace creer que se espera algo de él.
           admin
             .from('usuarios')
             .select('correo')
             .eq('rol', 'admin')
-            .eq('activo', true),
+            .eq('activo', true)
+            .eq('puede_aprobar_cotizaciones', true),
           admin
             .from('clientes')
             .select('nombre_comercial, razon_social, ruc')
@@ -267,7 +271,9 @@ export async function guardarCotizacion(
         ]);
         const correos = (admins ?? []).map((a) => a.correo as string);
         if (correos.length === 0) {
-          console.warn(`[correo] ${codigo}: sin admins activos a quienes avisar`);
+          console.warn(
+            `[correo] ${codigo}: nadie con permiso de aprobar a quien avisar`,
+          );
           return;
         }
 

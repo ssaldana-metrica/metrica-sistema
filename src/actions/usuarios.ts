@@ -112,6 +112,38 @@ export async function cambiarPuedeReactivar(
   return { ok: true };
 }
 
+// Decide quién puede aprobar cotizaciones. Solo gerencia, y no sobre su propia
+// fila: gerencia siempre puede, así que ahí el permiso no significa nada.
+//
+// La barrera real está en la máquina de estados de la base
+// (`trg_cotizacion_transicion`, migración 0037): aunque alguien llamara la API
+// por fuera de la pantalla, el disparador rechaza la aprobación.
+export async function cambiarPuedeAprobar(
+  usuarioId: string,
+  puede: boolean,
+): Promise<Resultado> {
+  const sesion = await obtenerSesion();
+  if (!sesion) return { error: 'Sesión expirada. Vuelve a entrar.' };
+  if (sesion.usuario.rol !== 'gerencia')
+    return { error: 'Solo gerencia decide quién puede aprobar cotizaciones.' };
+  if (usuarioId === sesion.usuario.id)
+    return { error: 'Gerencia siempre puede aprobar: este permiso no aplica a tu fila.' };
+
+  const supabase = await crearClienteServidor();
+  const { error } = await supabase
+    .from('usuarios')
+    .update({ puede_aprobar_cotizaciones: puede })
+    .eq('id', usuarioId);
+  if (error) return { error: 'No se pudo actualizar el permiso.' };
+
+  revalidatePath('/usuarios');
+  // El menú lateral esconde o muestra Aprobaciones según este permiso, y vive
+  // en el layout: sin esto la persona seguiría viendo la sección hasta que
+  // cerrara sesión.
+  revalidatePath('/', 'layout');
+  return { ok: true };
+}
+
 // ── Solicitudes de rol ──────────────────────────────────────────────────────
 //
 // Alguien que se registró pidiendo Administración entró como ejecutivo y su

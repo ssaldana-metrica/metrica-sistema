@@ -17,7 +17,7 @@ export default async function PaginaUsuarios() {
     supabase
       .from('usuarios')
       .select(
-        'id, nombre, correo, rol, activo, puede_reactivar, puede_otorgar_gerencia',
+        'id, nombre, correo, rol, activo, puede_reactivar, puede_otorgar_gerencia, puede_aprobar_cotizaciones',
       )
       .order('activo', { ascending: false })
       .order('nombre'),
@@ -42,6 +42,7 @@ export default async function PaginaUsuarios() {
     activo: u.activo as boolean,
     puedeReactivar: Boolean(u.puede_reactivar),
     puedeOtorgarGerencia: Boolean(u.puede_otorgar_gerencia),
+    puedeAprobar: Boolean(u.puede_aprobar_cotizaciones),
   }));
 
   const solicitudes: SolicitudPendiente[] = (pendientes ?? []).map((s) => {
@@ -72,8 +73,9 @@ export default async function PaginaUsuarios() {
       <div className="mb-5">
         <h1 className="text-lg font-bold tracking-tight">Usuarios</h1>
         <p className="mt-0.5 text-[13px] text-tinta-tenue">
-          {activos} activos de {usuarios.length} · cambia el rol o da de baja a
-          cualquier colaborador. Solo gerencia ve esta sección.
+          {activos} activos de {usuarios.length} · cambia el rol, decide quién
+          aprueba cotizaciones o da de baja a cualquier colaborador. Solo
+          gerencia ve esta sección.
         </p>
       </div>
 

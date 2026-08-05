@@ -1,3 +1,4 @@
+import { redirect } from 'next/navigation';
 import { exigirRol } from '@/lib/auth';
 import { crearClienteServidor } from '@/lib/supabase/server';
 import { uno } from '@/lib/util';
@@ -11,6 +12,10 @@ import type { Moneda } from '@/lib/calculos';
 // nueva. Al resolver una, pasa automáticamente a la siguiente.
 export default async function PaginaAprobaciones() {
   const { usuario } = await exigirRol(['admin', 'gerencia']);
+  // El rol abre la sección; el permiso decide quién resuelve. Sin él no hay
+  // nada que hacer acá, y la base rechazaría cualquier intento igualmente
+  // (migración 0037).
+  if (!usuario.puedeAprobar) redirect('/panel');
 
   const supabase = await crearClienteServidor();
   const { data } = await supabase
